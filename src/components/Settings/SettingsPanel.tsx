@@ -34,7 +34,7 @@ export default function SettingsPanel() {
   const updateField = <K extends keyof Settings>(field: K, value: Settings[K]) => {
     if (!formData) return;
     setFormData({ ...formData, [field]: value });
-    
+
     if (field === "ollama_url") {
       checkOllama(value as string);
     }
@@ -69,7 +69,13 @@ export default function SettingsPanel() {
               placeholder="http://localhost:11434"
             />
           </div>
-          <ModelSelector />
+          <ModelSelector
+            ollamaUrl={formData.ollama_url}
+            llmModel={formData.llm_model}
+            whisperModel={formData.whisper_model}
+            onLlmModelChange={(value) => updateField("llm_model", value)}
+            onWhisperModelChange={(value) => updateField("whisper_model", value)}
+          />
         </div>
 
         <div className="p-6 bg-slate-800 rounded-lg border border-slate-700 space-y-4">

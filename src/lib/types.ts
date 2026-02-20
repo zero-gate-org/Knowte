@@ -21,6 +21,29 @@ export interface AudioFileMetadata {
   size_bytes: number;
 }
 
+export interface WhisperDownloadProgress {
+  percent: number;
+  model_size: string;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface TranscriptionProgress {
+  lecture_id: string;
+  percent: number;
+}
+
+export interface TranscriptionResult {
+  lecture_id: string;
+  full_text: string;
+  segments: TranscriptSegment[];
+  model_used: string;
+}
+
 export interface StructuredNoteSection {
   heading: string;
   points: string[];
@@ -86,6 +109,7 @@ export interface Lecture {
   duration: number;
   status: LectureStatus;
   transcript?: string;
+  transcriptSegments?: TranscriptSegment[];
   summary?: string;
   notes?: StructuredNotes;
   quiz?: Quiz;

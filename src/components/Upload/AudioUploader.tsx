@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ProgressTracker from "../Pipeline/ProgressTracker";
+import { transcribeAudio } from "../../lib/tauriApi";
 import { useLectureStore } from "../../stores";
 import type { AudioFileMetadata, Lecture } from "../../lib/types";
 import DropZone from "./DropZone";
@@ -42,15 +45,19 @@ export default function AudioUploader() {
   const [activeTab, setActiveTab] = useState<UploadTab>("upload");
   const [latestMetadata, setLatestMetadata] = useState<AudioFileMetadata | null>(null);
   const [processHint, setProcessHint] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const {
     addLecture,
     setCurrentLecture,
+    updateLecture,
     isUploading,
     isRecording,
+    isProcessingLecture,
     error,
     setUploading,
     setRecording,
+    setProcessingLecture,
     setError,
   } = useLectureStore();
 
@@ -63,8 +70,39 @@ export default function AudioUploader() {
     setError(null);
   };
 
-  const handleProcessLecture = () => {
-    setProcessHint("Lecture processing will be connected in Phase 2.");
+  const handleProcessLecture = async () => {
+    if (!latestMetadata || isProcessingLecture) {
+      return;
+    }
+
+    const lectureId = latestMetadata.id;
+    setProcessingLecture(true);
+    setError(null);
+    setProcessHint("Transcribing audio...");
+    updateLecture(lectureId, { status: "transcribing", error: undefined });
+
+    try {
+      const result = await transcribeAudio(lectureId);
+      updateLecture(lectureId, {
+        status: "processing",
+        transcript: result.full_text,
+        transcriptSegments: result.segments,
+        error: undefined,
+      });
+      setCurrentLecture(lectureId);
+      setProcessHint("Transcription complete.");
+      navigate("/transcript");
+    } catch (transcriptionError) {
+      const message =
+        transcriptionError instanceof Error
+          ? transcriptionError.message
+          : String(transcriptionError);
+      updateLecture(lectureId, { status: "error", error: message });
+      setError(message);
+      setProcessHint("Transcription failed. See error details above.");
+    } finally {
+      setProcessingLecture(false);
+    }
   };
 
   return (
@@ -106,13 +144,13 @@ export default function AudioUploader() {
           <DropZone
             onUploadSuccess={handleAudioSuccess}
             onUploadStateChange={setUploading}
-            disabled={isRecording}
+            disabled={isRecording || isProcessingLecture}
           />
         ) : (
           <LiveRecorder
             onRecordingSaved={handleAudioSuccess}
             onRecordingStateChange={setRecording}
-            disabled={isUploading}
+            disabled={isUploading || isProcessingLecture}
           />
         )}
       </section>
@@ -121,6 +159,10 @@ export default function AudioUploader() {
         <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">
           {isUploading ? "Importing audio file..." : "Recording in progress..."}
         </div>
+      )}
+
+      {isProcessingLecture && (
+        <ProgressTracker lectureId={latestMetadata?.id ?? null} />
       )}
 
       {error && (
@@ -154,10 +196,11 @@ export default function AudioUploader() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={handleProcessLecture}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+              onClick={() => void handleProcessLecture()}
+              disabled={isUploading || isRecording || isProcessingLecture}
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Process Lecture
+              {isProcessingLecture ? "Processing..." : "Process Lecture"}
             </button>
             {processHint && <p className="text-sm text-slate-400">{processHint}</p>}
           </div>

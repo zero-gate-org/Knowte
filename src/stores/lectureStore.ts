@@ -6,6 +6,7 @@ interface LectureState {
   currentLectureId: string | null;
   isUploading: boolean;
   isRecording: boolean;
+  isProcessingLecture: boolean;
   error: string | null;
 
   addLecture: (lecture: Lecture) => void;
@@ -13,6 +14,7 @@ interface LectureState {
   updateLecture: (lectureId: string, updates: Partial<Lecture>) => void;
   setUploading: (isUploading: boolean) => void;
   setRecording: (isRecording: boolean) => void;
+  setProcessingLecture: (isProcessingLecture: boolean) => void;
   setError: (error: string | null) => void;
 }
 
@@ -21,6 +23,7 @@ export const useLectureStore = create<LectureState>((set) => ({
   currentLectureId: null,
   isUploading: false,
   isRecording: false,
+  isProcessingLecture: false,
   error: null,
 
   addLecture: (lecture) =>
@@ -50,6 +53,11 @@ export const useLectureStore = create<LectureState>((set) => ({
   setRecording: (isRecording) =>
     set({
       isRecording,
+    }),
+
+  setProcessingLecture: (isProcessingLecture) =>
+    set({
+      isProcessingLecture,
     }),
 
   setError: (error) =>

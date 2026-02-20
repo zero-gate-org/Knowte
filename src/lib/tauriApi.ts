@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AudioFileMetadata, OllamaStatus, Settings } from "./types";
+import type {
+  AudioFileMetadata,
+  OllamaStatus,
+  Settings,
+  TranscriptionResult,
+} from "./types";
 
 export async function checkOllamaStatus(ollamaUrl: string): Promise<OllamaStatus> {
   return invoke<OllamaStatus>("check_ollama_status", { ollamaUrl });
@@ -27,4 +32,16 @@ export async function startRecording(): Promise<string> {
 
 export async function stopRecording(recordingId: string): Promise<AudioFileMetadata> {
   return invoke<AudioFileMetadata>("stop_recording", { recordingId });
+}
+
+export async function checkWhisperModels(): Promise<string[]> {
+  return invoke<string[]>("check_whisper_models");
+}
+
+export async function downloadWhisperModel(modelSize: string): Promise<string> {
+  return invoke<string>("download_whisper_model", { modelSize });
+}
+
+export async function transcribeAudio(lectureId: string): Promise<TranscriptionResult> {
+  return invoke<TranscriptionResult>("transcribe_audio", { lectureId });
 }

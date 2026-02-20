@@ -2,6 +2,45 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 2.1] - 2026-02-20
+- Added: Whisper transcription command module with `download_whisper_model`, `check_whisper_models`, and `transcribe_audio`
+- Added: Whisper model download progress events (`whisper-download-progress`) and transcription progress events (`transcription-progress`)
+- Added: SQLite database initialization, schema migrations, and query layer for `lectures` and `transcripts` tables
+- Added: Lecture persistence in audio ingestion commands so uploaded/recorded files are tracked in SQLite
+- Added: Audio conversion pipeline for transcription with ffmpeg primary path and Symphonia + Rubato fallback to 16kHz mono WAV
+- Added: Settings UI support for whisper model downloads with downloaded-state badges and progress bar
+- Added: Transcript viewer with timestamped segments, search box, and copy-all action
+- Added: Upload page processing flow that starts transcription, tracks progress, updates lecture state, and navigates to Transcript view
+- Added: Pipeline `ProgressTracker` and `StageIndicator` components for live transcription stage feedback
+- Changed: Frontend Tauri API/type/store contracts to include transcription, whisper model management, and transcript segments
+- Fixed: Tauri wrapper now exports `WHISPER_DONT_GENERATE_BINDINGS=1` to avoid clang/libclang dependency for whisper bindings generation
+- Fixed: Tauri wrapper now checks for `cmake` early and prints explicit Linux install instructions when missing
+- Files modified:
+  - src-tauri/Cargo.toml
+  - src-tauri/src/lib.rs
+  - src-tauri/src/commands/mod.rs
+  - src-tauri/src/commands/audio.rs
+  - src-tauri/src/commands/transcribe.rs
+  - src-tauri/src/db/mod.rs
+  - src-tauri/src/db/schema.rs
+  - src-tauri/src/db/queries.rs
+  - src/lib/types.ts
+  - src/lib/tauriApi.ts
+  - src/stores/settingsStore.ts
+  - src/stores/lectureStore.ts
+  - src/components/Settings/SettingsPanel.tsx
+  - src/components/Settings/ModelSelector.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/Pipeline/ProgressTracker.tsx
+  - src/components/Pipeline/StageIndicator.tsx
+  - src/components/Pipeline/index.ts
+  - src/components/Transcript/TranscriptViewer.tsx
+  - src/components/Transcript/index.ts
+  - src/components/index.ts
+  - src/pages/Transcript.tsx
+  - scripts/tauri-safe.sh
+  - CHANGELOG.md
+
 ## [Task 1.1] - 2026-02-21
 - Added: Tauri v2 desktop app scaffold with React + TypeScript + Vite frontend
 - Added: Dark theme by default using Tailwind CSS (slate-900 bg, slate-100 text)

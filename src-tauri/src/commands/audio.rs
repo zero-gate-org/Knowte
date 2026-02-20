@@ -1,3 +1,6 @@
+use crate::db::queries::{upsert_lecture, LectureRecord};
+use crate::db::AppDatabase;
+use chrono::Utc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 use std::fs::{self, File};
@@ -67,6 +70,8 @@ enum AudioError {
     FinalizeRecordingFailed,
     #[error("Failed to lock recording state.")]
     StateLockFailed,
+    #[error("Unable to update lecture records.")]
+    DatabaseFailed,
 }
 
 impl From<AudioError> for String {
@@ -97,8 +102,12 @@ pub fn pick_audio_file() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub fn accept_audio_file(app: AppHandle, path: String) -> Result<AudioFileMetadata, String> {
-    accept_audio_file_impl(&app, &path).map_err(Into::into)
+pub fn accept_audio_file(
+    app: AppHandle,
+    database: State<'_, AppDatabase>,
+    path: String,
+) -> Result<AudioFileMetadata, String> {
+    accept_audio_file_impl(&app, database.inner(), &path).map_err(Into::into)
 }
 
 #[tauri::command]
@@ -109,13 +118,18 @@ pub fn start_recording(app: AppHandle, state: State<'_, RecordingState>) -> Resu
 #[tauri::command]
 pub fn stop_recording(
     app: AppHandle,
+    database: State<'_, AppDatabase>,
     state: State<'_, RecordingState>,
     recording_id: String,
 ) -> Result<AudioFileMetadata, String> {
-    stop_recording_impl(&app, state.inner(), recording_id).map_err(Into::into)
+    stop_recording_impl(&app, database.inner(), state.inner(), recording_id).map_err(Into::into)
 }
 
-fn accept_audio_file_impl(app: &AppHandle, path: &str) -> Result<AudioFileMetadata, AudioError> {
+fn accept_audio_file_impl(
+    app: &AppHandle,
+    database: &AppDatabase,
+    path: &str,
+) -> Result<AudioFileMetadata, AudioError> {
     let source_path = PathBuf::from(path);
 
     if !source_path.exists() {
@@ -138,7 +152,9 @@ fn accept_audio_file_impl(app: &AppHandle, path: &str) -> Result<AudioFileMetada
         .map(str::to_owned)
         .unwrap_or_else(|| format!("{id}.{extension}"));
 
-    build_audio_metadata(id, filename, &destination_path)
+    let metadata = build_audio_metadata(id, filename, &destination_path)?;
+    persist_lecture_metadata(database, &metadata)?;
+    Ok(metadata)
 }
 
 fn start_recording_impl(app: &AppHandle, state: &RecordingState) -> Result<String, AudioError> {
@@ -196,6 +212,7 @@ fn start_recording_impl(app: &AppHandle, state: &RecordingState) -> Result<Strin
 
 fn stop_recording_impl(
     _app: &AppHandle,
+    database: &AppDatabase,
     state: &RecordingState,
     recording_id: String,
 ) -> Result<AudioFileMetadata, AudioError> {
@@ -236,11 +253,13 @@ fn stop_recording_impl(
         return Err(AudioError::FileNotFound);
     }
 
-    build_audio_metadata(
+    let metadata = build_audio_metadata(
         recording_id.clone(),
         format!("{recording_id}.wav"),
         &output_path,
-    )
+    )?;
+    persist_lecture_metadata(database, &metadata)?;
+    Ok(metadata)
 }
 
 fn run_recording_worker(
@@ -566,4 +585,22 @@ fn get_extension(path: &Path) -> Result<String, AudioError> {
     } else {
         Err(AudioError::UnsupportedExtension(extension))
     }
+}
+
+fn persist_lecture_metadata(
+    database: &AppDatabase,
+    metadata: &AudioFileMetadata,
+) -> Result<(), AudioError> {
+    let connection = database.connect().map_err(|_| AudioError::DatabaseFailed)?;
+
+    let lecture = LectureRecord {
+        id: metadata.id.clone(),
+        filename: metadata.filename.clone(),
+        audio_path: metadata.path.clone(),
+        duration: metadata.duration_seconds,
+        status: "uploaded".to_string(),
+        created_at: Utc::now().to_rfc3339(),
+    };
+
+    upsert_lecture(&connection, &lecture).map_err(|_| AudioError::DatabaseFailed)
 }

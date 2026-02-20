@@ -1,3 +1,5 @@
 export { default as Sidebar } from "./Sidebar";
 export * from "./Settings";
 export * from "./Upload";
+export * from "./Pipeline";
+export * from "./Transcript";
