@@ -1,0 +1,98 @@
+# Changelog
+
+All notable changes to the Cognote project will be documented in this file.
+
+## [Task 1.1] - 2026-02-21
+- Added: Tauri v2 desktop app scaffold with React + TypeScript + Vite frontend
+- Added: Dark theme by default using Tailwind CSS (slate-900 bg, slate-100 text)
+- Added: Sidebar layout with navigation between 8 views (Upload, Transcript, Notes, Quiz, Research, Mind Map, Flashcards, Settings)
+- Added: React Router DOM for client-side routing
+- Added: Zustand state management library
+- Added: Full folder structure for src/ and src-tauri/src/ directories
+- Files modified:
+  - src/App.tsx
+  - src/main.tsx
+  - src/vite-env.d.ts
+  - src/components/Sidebar.tsx
+  - src/components/index.ts
+  - src/pages/Upload.tsx
+  - src/pages/Transcript.tsx
+  - src/pages/Notes.tsx
+  - src/pages/Quiz.tsx
+  - src/pages/Research.tsx
+  - src/pages/MindMap.tsx
+  - src/pages/Flashcards.tsx
+  - src/pages/Settings.tsx
+  - src/pages/index.ts
+  - src/stores/index.ts
+  - src/lib/index.ts
+  - src/types/index.ts
+  - src/utils/index.ts
+  - src/hooks/index.ts
+  - src-tauri/src/main.rs
+  - src-tauri/src/lib.rs
+  - src-tauri/tauri.conf.json
+  - package.json
+  - tsconfig.json
+  - tailwind.config.js
+  - vite.config.ts
+
+## [Task 1.2] - 2026-02-21
+- Added: Settings page with Ollama connection layer
+- Added: Tauri command `check_ollama_status` to verify Ollama availability and list models
+- Added: Tauri commands `get_settings` and `save_settings` for persistent settings storage
+- Added: Settings JSON file stored in app data directory with default values
+- Added: SettingsPanel component with form fields for all configuration options
+- Added: ModelSelector component with connection status indicator (green/red dot)
+- Added: PersonalizationConfig component with education level options
+- Added: Zustand store for settings state management
+- Files modified:
+  - src/components/Settings/SettingsPanel.tsx
+  - src/components/Settings/ModelSelector.tsx
+  - src/components/Settings/PersonalizationConfig.tsx
+  - src/components/Settings/index.ts
+  - src/stores/settingsStore.ts
+  - src/lib/tauriApi.ts
+  - src/lib/types.ts
+  - src/lib/constants.ts
+  - src-tauri/src/commands/settings.rs
+  - src-tauri/src/commands/mod.rs
+  - src-tauri/src/utils/mod.rs
+  - src-tauri/src/models/mod.rs
+
+## [Task 1.3] - 2026-02-20
+- Added: Backend audio command module with `accept_audio_file`, `start_recording`, and `stop_recording`
+- Added: File picker command `pick_audio_file` for browse workflow in the upload UI
+- Added: Audio validation/copy flow to `app_data_dir/lectures/{uuid}.{ext}` with metadata response (duration and file size)
+- Added: Live microphone recording via `cpal` with WAV output and session state management
+- Added: Symphonia-based duration extraction for uploaded/recorded files
+- Fixed: Recording runtime state now uses a worker thread handle instead of storing non-Send `cpal::Stream` in Tauri managed state
+- Fixed: Enabled Symphonia MP4/AAC/ALAC features so `.m4a` uploads can read duration metadata correctly
+- Fixed: Live recording now continues even when browser/WebView microphone permission is denied for waveform visualization
+- Changed: Live visualizer now consumes backend `cpal` level events (`recording-level`) instead of requiring `getUserMedia` in the WebView
+- Fixed: Sanitized Tauri dev/build runtime environment to avoid Snap `LD_LIBRARY_PATH` glibc conflicts on Linux
+- Fixed: Added `scripts/tauri-safe.sh` to clear Snap/loader env vars before invoking Tauri CLI
+- Changed: `scripts/tauri-safe.sh` now unsets all `LD_*` and `SNAP*` variables generically
+- Added: Upload UI components (`AudioUploader`, `DropZone`, `LiveRecorder`) with tabbed file upload and live recording
+- Added: Waveform visualization rendered from backend microphone level events during live recording
+- Added: `lectureStore` Zustand state with lecture list, current lecture, loading states, and update actions
+- Added: Shared lecture/audio TypeScript interfaces and typed Tauri API wrappers for audio commands
+- Added: File info card with duration/size and placeholder `Process Lecture` action after upload/record
+- Files modified:
+  - src/lib/types.ts
+  - src/lib/tauriApi.ts
+  - src/lib/constants.ts
+  - src/stores/index.ts
+  - src/stores/lectureStore.ts
+  - src/components/index.ts
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/Upload/DropZone.tsx
+  - src/components/Upload/LiveRecorder.tsx
+  - src/components/Upload/index.ts
+  - src/pages/Upload.tsx
+  - src-tauri/Cargo.toml
+  - src-tauri/src/commands/mod.rs
+  - src-tauri/src/commands/audio.rs
+  - src-tauri/src/lib.rs
+  - scripts/tauri-safe.sh
+  - CHANGELOG.md
