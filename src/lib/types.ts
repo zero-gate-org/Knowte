@@ -11,6 +11,8 @@ export interface Settings {
   enable_research: boolean;
   theme: ThemeMode;
   delete_audio_after_processing: boolean;
+  /** Whether the user has completed the initial setup wizard. */
+  setup_complete: boolean;
 }
 
 export interface OllamaStatus {
@@ -308,4 +310,5 @@ export const DEFAULT_SETTINGS: Settings = {
   enable_research: true,
   theme: "dark",
   delete_audio_after_processing: false,
+  setup_complete: false,
 };

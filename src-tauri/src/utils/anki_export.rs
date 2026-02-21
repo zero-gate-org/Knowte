@@ -190,7 +190,7 @@ pub fn export_as_apkg(
 
     // ── Create temporary SQLite database ──────────────────────────────────────
 
-    let tmp_db = std::env::temp_dir().join(format!("cognote_{}.anki2", uuid::Uuid::new_v4()));
+    let tmp_db = std::env::temp_dir().join(format!("knowte_{}.anki2", uuid::Uuid::new_v4()));
 
     {
         let conn =

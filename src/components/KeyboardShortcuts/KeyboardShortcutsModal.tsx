@@ -66,7 +66,7 @@ export default function KeyboardShortcutsModal({
               Keyboard Shortcuts
             </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-              Use these shortcuts to navigate and control Cognote faster.
+              Use these shortcuts to navigate and control Knowte faster.
             </p>
           </div>
           <button
@@ -99,7 +99,7 @@ export default function KeyboardShortcutsModal({
 
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-              Lecture Views
+              Knowte Views
             </p>
             {LECTURE_VIEW_SHORTCUTS.map((shortcut) => (
               <div

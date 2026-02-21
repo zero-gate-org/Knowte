@@ -111,8 +111,8 @@ function EmptyState({ reason }: { reason: "no-lecture" | "no-notes" }) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-[var(--text-muted)] space-y-2">
         <span className="text-4xl">📝</span>
-        <p className="text-sm">No lecture selected.</p>
-        <p className="text-xs">Upload and process a lecture to view notes.</p>
+        <p className="text-sm">No knowte selected.</p>
+        <p className="text-xs">Add and process a knowte to view notes.</p>
       </div>
     );
   }
@@ -214,7 +214,7 @@ export default function Notes() {
     return (
       <div className={notesContainerClass}>
         <ViewHeader
-          title="Lecture Notes"
+          title="Knowte Notes"
           description="Structured summaries, key concepts, and takeaways."
         />
         <EmptyState reason="no-lecture" />
@@ -226,7 +226,7 @@ export default function Notes() {
   if (isLoading) {
     return (
       <div className={notesContainerClass}>
-        <ViewHeader title="Lecture Notes" description={currentLecture.filename} />
+        <ViewHeader title="Knowte Notes" description={currentLecture.filename} />
         <NotesSkeleton />
       </div>
     );
@@ -236,7 +236,7 @@ export default function Notes() {
   if (error) {
     return (
       <div className={notesContainerClass}>
-        <ViewHeader title="Lecture Notes" description={currentLecture.filename} />
+        <ViewHeader title="Knowte Notes" description={currentLecture.filename} />
         <div className="bg-[var(--color-error-muted)] border border-[var(--color-error-muted)] rounded-lg p-4 text-[var(--color-error)] text-sm">
           {error}
         </div>
@@ -256,7 +256,7 @@ export default function Notes() {
     return (
       <div className={notesContainerClass}>
         <ViewHeader
-          title="Lecture Notes"
+          title="Knowte Notes"
           description={currentLecture.filename}
           actions={
             <button
@@ -284,7 +284,7 @@ export default function Notes() {
   return (
     <div className={notesContainerClass}>
       <ViewHeader
-        title="Lecture Notes"
+        title="Knowte Notes"
         description={currentLecture.filename}
         actions={
           <div className="flex items-center gap-2">

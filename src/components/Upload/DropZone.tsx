@@ -215,7 +215,7 @@ export default function DropZone({
         }}
       >
         <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-          Drag and drop lecture files
+          Drag and drop audio or video files
         </h3>
         <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
           Supported: {SUPPORTED_MEDIA_EXTENSIONS.map((ext) => `.${ext}`).join(", ")}

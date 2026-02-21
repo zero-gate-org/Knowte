@@ -18,7 +18,7 @@ export default function Pipeline() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <ViewHeader
-        title="Processing Lecture"
+        title="Processing Knowte"
         description={
           currentLecture
             ? `Generating AI content for "${currentLecture.filename}"…`
@@ -33,7 +33,7 @@ export default function Pipeline() {
         />
       ) : (
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-6 py-10 text-center text-[var(--text-muted)] shadow-sm">
-          No lecture selected. Please upload and process a lecture first.
+          No knowte selected. Please add and process a knowte first.
         </div>
       )}
 

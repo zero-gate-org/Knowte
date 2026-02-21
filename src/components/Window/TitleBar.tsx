@@ -1,17 +1,14 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import appIcon from "../../assets/cognote-icon.svg";
 import type { ThemeMode } from "../../lib/types";
 
 interface TitleBarProps {
-  currentViewLabel: string;
   theme: ThemeMode;
   onToggleTheme: () => void;
 }
 
 export default function TitleBar({
-  currentViewLabel,
   theme,
   onToggleTheme,
 }: TitleBarProps) {
@@ -93,22 +90,15 @@ export default function TitleBar({
         borderBottom: "1px solid var(--border-default)",
       }}
     >
-      <div className="flex min-w-0 items-center gap-2" data-tauri-drag-region>
-        <img src={appIcon} alt="Cognote app icon" className="h-5 w-5 shrink-0" />
-        <div className="min-w-0 leading-tight" data-tauri-drag-region>
-          <p
-            className="truncate text-xs font-semibold tracking-widest"
-            style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}
-          >
-            COGNOTE
-          </p>
-          <p
-            className="truncate text-[11px]"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {currentViewLabel}
-          </p>
-        </div>
+      <div className="flex min-w-0 items-center gap-3" data-tauri-drag-region>
+        <img src="/Knowte.png" alt="Knowte app icon" className="h-8 w-16 shrink-0" />
+        <p
+          className="truncate text-xs font-semibold tracking-widest"
+          style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}
+          data-tauri-drag-region
+        >
+          KNOWTE
+        </p>
       </div>
 
       <div className="flex items-center gap-1.5">

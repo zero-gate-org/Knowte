@@ -13,8 +13,8 @@ function EmptyState({ reason }: { reason: "no-lecture" | "no-flashcards" }) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-[var(--text-muted)] space-y-2">
         <span className="text-4xl">🃏</span>
-        <p className="text-sm">No lecture selected.</p>
-        <p className="text-xs">Upload and process a lecture to generate flashcards.</p>
+        <p className="text-sm">No knowte selected.</p>
+        <p className="text-xs">Add and process a knowte to generate flashcards.</p>
       </div>
     );
   }

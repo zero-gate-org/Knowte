@@ -108,7 +108,7 @@ export default function TranscriptAudioPlayer({
 
         {isDisabled && (
           <p className="text-xs text-[var(--text-muted)]">
-            {disabledReason ?? "Audio source is unavailable for this lecture."}
+            {disabledReason ?? "Audio source is unavailable for this knowte."}
           </p>
         )}
       </div>

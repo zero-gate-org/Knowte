@@ -269,7 +269,7 @@ export default function LectureLibrary() {
       setError(null);
       try {
         const exportPath = await exportAllLectureData(lecture.id, outputDir.trim());
-        window.alert(`Lecture data exported to:\n${exportPath}`);
+        window.alert(`Knowte data exported to:\n${exportPath}`);
       } catch (exportError) {
         setError(exportError instanceof Error ? exportError.message : String(exportError));
       } finally {
@@ -282,22 +282,22 @@ export default function LectureLibrary() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <ViewHeader
-        title="Your Lectures"
-        description="Browse, search, and manage your lecture history."
+        title="Your Knowtes"
+        description="Browse, search, and manage your knowte history."
         actions={
           <button
             type="button"
             onClick={() => navigate("/upload")}
             className="btn-primary"
           >
-            New Lecture
+            Add Knowte
           </button>
         }
       />
 
       <section className="card grid gap-3 p-4 md:grid-cols-[1fr_auto_auto]">
         <label className="block">
-          <span className="sr-only">Search lectures</span>
+          <span className="sr-only">Search knowtes</span>
           <input
             type="search"
             value={query}
@@ -345,14 +345,14 @@ export default function LectureLibrary() {
         <div className="flex h-64 items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>
           <span className="inline-flex items-center gap-2">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "var(--text-muted)", borderTopColor: "transparent" }} />
-            Loading lectures...
+            Loading knowtes...
           </span>
         </div>
       ) : lectureSummaries.length === 0 ? (
         <EmptyState />
       ) : filteredLectures.length === 0 ? (
         <div className="card px-6 py-10 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-          No lectures match your filters.
+          No knowtes match your filters.
         </div>
       ) : (
         <section className="grid gap-4 sm:grid-cols-2">
@@ -416,7 +416,7 @@ export default function LectureLibrary() {
                     }}
                     disabled={isBusy}
                     className="btn-ghost px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label={`Lecture actions for ${lecture.title}`}
+                    aria-label={`Knowte actions for ${lecture.title}`}
                   >
                     ⋮
                   </button>

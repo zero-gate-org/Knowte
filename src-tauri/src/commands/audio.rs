@@ -96,7 +96,7 @@ enum AudioError {
     #[error("Failed to save the media file.")]
     SaveFailed,
     #[error(
-        "Unable to find ffmpeg. Reinstall Cognote (bundled ffmpeg) or install ffmpeg on your system."
+        "Unable to find ffmpeg. Reinstall Knowte (bundled ffmpeg) or install ffmpeg on your system."
     )]
     FfmpegMissing,
     #[error(
@@ -110,7 +110,7 @@ enum AudioError {
     #[error("Only YouTube URLs are supported. Use a youtube.com or youtu.be link.")]
     InvalidYouTubeUrl,
     #[error(
-        "Unable to find yt-dlp. Reinstall Cognote (bundled yt-dlp) or install yt-dlp on your system."
+        "Unable to find yt-dlp. Reinstall Knowte (bundled yt-dlp) or install yt-dlp on your system."
     )]
     YtDlpMissing,
     #[error(

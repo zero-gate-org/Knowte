@@ -2,6 +2,28 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 8.4] - 2025-07-28
+- Added: Comprehensive `tauri.conf.json` bundle configuration — productName "Cognote", identifier "com.cognote.app", minWidth/minHeight 800×600, audio/video file associations, Windows NSIS+WiX, macOS, Linux deb/AppImage/rpm, category "Education", copyright, MIT license
+- Added: `setup_complete: bool` field to Rust `Settings` struct in `settings.rs` with `serde(default)` for backward compatibility
+- Added: `setup_complete: boolean` to TypeScript `Settings` interface and `DEFAULT_SETTINGS` in `types.ts`
+- Added: `src/components/Setup/SetupWizard.tsx` — 6-step first-run setup wizard (welcome, Ollama check, model selection, Whisper download, personalization level, ready) rendered as fixed full-screen overlay at z-50
+- Added: Whisper model download progress via Tauri event listener (`whisper-download-progress`) with live progress bar in wizard
+- Added: `src/components/Setup/index.ts` barrel export
+- Changed: `src/components/index.ts` — added `export * from "./Setup"` for wizard component
+- Changed: `App.tsx` — wired `SetupWizard` with `showWizard` state, `useEffect` trigger on `settings.setup_complete`, and `handleWizardComplete` callback that merges updates and saves settings
+- Added: `README.md` — fully rewritten with features overview, prerequisites, quick start, build instructions, tech stack table, privacy/data section, contributing, and license
+- Added: `CONTRIBUTING.md` — complete developer contribution guide with system requirements, bundled binary paths, code conventions, commit format, and issue reporting
+- Files modified:
+  - src-tauri/tauri.conf.json
+  - src-tauri/src/commands/settings.rs
+  - src/lib/types.ts
+  - src/components/Setup/SetupWizard.tsx (created)
+  - src/components/Setup/index.ts (created)
+  - src/components/index.ts
+  - src/App.tsx
+  - README.md
+  - CONTRIBUTING.md (created)
+
 ## [Task 6.2] - 2025-07-27
 - Added: Complete CSS custom properties design system in `index.css` with 50+ theme tokens (colors, typography, spacing, borders, shadows)
 - Added: Light and dark theme support via CSS variables — automatic switching with `.dark` class on `<html>` and `@custom-variant dark`

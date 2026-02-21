@@ -35,7 +35,7 @@ export default class AppErrorBoundary extends React.Component<
           <div className="w-full max-w-lg rounded-xl border border-[var(--color-error-muted)] bg-[var(--bg-elevated)] p-8 shadow-lg">
             <h1 className="text-2xl font-bold text-[var(--color-error)]">Something went wrong</h1>
             <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">
-              Cognote hit an unexpected UI error. No lecture files were deleted, but this screen
+              Knowte hit an unexpected UI error. No files were deleted, but this screen
               cannot recover automatically.
             </p>
             <button

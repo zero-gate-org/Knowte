@@ -385,7 +385,7 @@ export default function Compare() {
         {isLoadingLectures ? (
           <p className="text-sm text-[var(--text-muted)]">Loading lectures...</p>
         ) : filteredLectures.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No lectures match your search.</p>
+          <p className="text-sm text-[var(--text-muted)]">No knowtes match your search.</p>
         ) : (
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {filteredLectures.map((lecture) => {

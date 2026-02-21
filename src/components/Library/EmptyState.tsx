@@ -22,16 +22,16 @@ export default function EmptyState() {
           />
         </svg>
       </div>
-      <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>No lectures yet</h2>
+      <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>No knowtes yet</h2>
       <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: "var(--text-muted)" }}>
-        Upload your first lecture to start generating transcripts, notes, quizzes, and flashcards.
+        Add your first knowte to start generating transcripts, notes, quizzes, and flashcards.
       </p>
       <button
         type="button"
         onClick={() => navigate("/upload")}
         className="btn-primary mt-6"
       >
-        Upload your first lecture
+        Add your first knowte
       </button>
     </div>
   );

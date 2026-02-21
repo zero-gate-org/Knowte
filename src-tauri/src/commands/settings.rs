@@ -21,12 +21,15 @@ pub struct Settings {
     pub theme: String,
     #[serde(default = "Settings::default_delete_audio_after_processing")]
     pub delete_audio_after_processing: bool,
+    /// Whether the user has completed the initial setup wizard.
+    #[serde(default = "Settings::default_setup_complete")]
+    pub setup_complete: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         let export_path = dirs::document_dir()
-            .map(|p| p.join("Cognote"))
+            .map(|p| p.join("Knowte"))
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
 
@@ -41,6 +44,7 @@ impl Default for Settings {
             enable_research: true,
             theme: Self::default_theme(),
             delete_audio_after_processing: Self::default_delete_audio_after_processing(),
+            setup_complete: Self::default_setup_complete(),
         }
     }
 }
@@ -59,6 +63,10 @@ impl Settings {
     }
 
     fn default_delete_audio_after_processing() -> bool {
+        false
+    }
+
+    fn default_setup_complete() -> bool {
         false
     }
 }

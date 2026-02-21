@@ -8,12 +8,12 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { KeyboardShortcutsModal, Sidebar, TitleBar } from "./components";
+import { KeyboardShortcutsModal, SetupWizard, Sidebar, TitleBar } from "./components";
 import { ToastViewport } from "./components/Toast";
 import { useHotkeys } from "./hooks";
 import { HOTKEY_EVENT_NAMES, LECTURE_VIEW_SHORTCUTS } from "./lib/hotkeys";
 import { listLectures } from "./lib/tauriApi";
-import type { Lecture, LectureSummary, ThemeMode } from "./lib/types";
+import type { Lecture, LectureSummary, Settings, ThemeMode } from "./lib/types";
 import { useLectureStore, useSettingsStore, useToastStore, useUiStore } from "./stores";
 import "./index.css";
 
@@ -71,12 +71,8 @@ function viewLabelFromPath(pathname: string): string {
   if (pathname === "/upload") return "Upload";
   if (pathname === "/compare") return "Compare";
   if (pathname === "/settings") return "Settings";
-
   const lectureSegment = extractLectureSegment(pathname);
-  if (lectureSegment) {
-    return LECTURE_ROUTE_LABELS[lectureSegment] ?? "Lecture";
-  }
-
+  if (lectureSegment) return LECTURE_ROUTE_LABELS[lectureSegment] ?? "Knowte";
   return "View";
 }
 
@@ -121,6 +117,7 @@ function AppLayout() {
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [isThemeSaving, setIsThemeSaving] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
     setCurrentLecture(extractLectureId(location.pathname));
@@ -138,6 +135,20 @@ function AppLayout() {
       setTheme(settings.theme);
     }
   }, [settings?.theme]);
+
+  // Show the setup wizard on first launch (setup_complete is false)
+  useEffect(() => {
+    if (settings && !settings.setup_complete) {
+      setShowWizard(true);
+    }
+  }, [settings?.setup_complete]);
+
+  const handleWizardComplete = useCallback(async (updates: Partial<Settings>) => {
+    if (!settings) return;
+    const updated = { ...settings, ...updates, setup_complete: true };
+    await saveSettings(updated);
+    setShowWizard(false);
+  }, [settings, saveSettings]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -346,7 +357,6 @@ function AppLayout() {
   return (
     <div className="flex h-screen flex-col" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
       <TitleBar
-        currentViewLabel={viewLabelFromPath(location.pathname)}
         theme={theme}
         onToggleTheme={() => void handleToggleTheme()}
       />
@@ -395,6 +405,13 @@ function AppLayout() {
       </div>
 
       <KeyboardShortcutsModal isOpen={isShortcutsOpen} onClose={closeShortcutsModal} />
+
+      {showWizard && settings && (
+        <SetupWizard
+          initialSettings={settings}
+          onComplete={(updates) => handleWizardComplete(updates)}
+        />
+      )}
     </div>
   );
 }

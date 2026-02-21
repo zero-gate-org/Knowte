@@ -1492,6 +1492,428 @@ Create a CONTRIBUTING.md with development setup instructions.
 ---
 
 
+## PHASE 9: Custom Theming System
+
+**Goal: Let users load custom themes and allow devs to ship new built-in themes with releases. Builds on the existing CSS custom-property design system with zero component changes.**
+
+### Architecture Overview
+
+The entire UI already uses ~50 CSS variables (backgrounds, text, borders, accents, shadows, inputs, sidebar, etc.) defined in `:root` (light) and `html.dark` (dark). A "theme" is simply a JSON object mapping these variable names to values. Adding themes means:
+
+1. **Built-in themes** — JSON files bundled in the app defining variable overrides.
+2. **User themes** — JSON files in the app data directory that users create, import, or download.
+3. **Theme engine** — Applies a JSON theme by injecting CSS variables onto `<html>` via a `<style>` tag or `element.style.setProperty()`.
+
+No component code changes required — every component already uses `var(--token)`.
+
+```
+Theme resolution order:
+  1. Active theme CSS variables (user or built-in)
+  2. Falls back to "dark" or "light" base palette
+```
+
+```
+Theme file schema (JSON):
+{
+  "id": "monokai-dark",
+  "name": "Monokai Dark",
+  "author": "Cognote Team",
+  "version": "1.0.0",
+  "base": "dark",                    // "dark" | "light" — determines Tailwind dark: prefix
+  "variables": {
+    "--bg-base": "#272822",
+    "--bg-surface": "#2d2e27",
+    "--bg-surface-raised": "#383930",
+    "--text-primary": "#f8f8f2",
+    "--accent-primary": "#a6e22e",
+    "--accent-primary-hover": "#b8f34a",
+    "--accent-secondary": "#fd971f",
+    "--color-success": "#a6e22e",
+    "--color-error": "#f92672",
+    "--sidebar-bg": "#1e1f1c",
+    // ... any subset of the ~50 CSS variables
+    // missing variables inherit from the base ("dark" or "light") palette
+  },
+  "fonts": {                         // optional
+    "--font-heading": "'JetBrains Mono', monospace",
+    "--font-body": "'JetBrains Mono', monospace"
+  }
+}
+```
+
+### File Locations
+
+```
+src-tauri/
+  resources/
+    themes/                           # Built-in themes shipped with the app
+      monokai-dark.json
+      solarized-light.json
+      nord.json
+      dracula.json
+      catppuccin-mocha.json
+      github-light.json
+      rose-pine.json
+
+<app_data_dir>/
+  themes/                             # User themes directory
+    my-custom-theme.json
+    downloaded-theme.json
+  settings.json                       # theme field changes from "dark"/"light" to theme id
+
+src/
+  lib/
+    themeEngine.ts                    # Theme loading, applying, validation
+    themes.ts                        # Built-in theme metadata + registry
+  components/
+    Settings/
+      ThemePicker.tsx                 # Theme browser + preview UI
+      ThemeEditor.tsx                 # Simple theme editor (color pickers)
+      ThemeImportExport.tsx           # Import/export theme JSON files
+```
+
+---
+
+### Task 9.1 — Theme Engine + Built-in Themes
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build the theme engine and bundle 5+ built-in themes.
+
+THEME ENGINE (src/lib/themeEngine.ts):
+
+Create a ThemeEngine module with these functions:
+
+1. `applyTheme(theme: ThemeDefinition)`:
+   - Sets the `data-theme` attribute on `<html>` to the theme id
+   - Toggles `.dark` / `.light` class based on theme.base
+   - Iterates theme.variables and calls
+     `document.documentElement.style.setProperty(key, value)`
+     for each CSS variable
+   - If theme.fonts exists, applies font overrides
+   - Stores active theme id in localStorage for instant boot
+
+2. `resetTheme()`:
+   - Removes all inline CSS properties from <html>
+   - Reverts to default dark/light based on settings
+
+3. `validateTheme(json: unknown): ThemeDefinition | ThemeValidationError`:
+   - Validates the JSON against the theme schema
+   - Checks required fields: id, name, base, variables
+   - Validates variable names start with "--"
+   - Validates color values (hex, rgb, rgba, hsl, oklch)
+   - Returns typed ThemeDefinition or validation errors
+
+4. `mergeWithBase(theme: ThemeDefinition): Record<string, string>`:
+   - Takes a theme's partial variables and merges with the full
+     base palette (dark or light) so all ~50 variables are defined
+   - This ensures themes with only a few overrides still work
+
+5. `generatePreviewColors(theme: ThemeDefinition)`:
+   - Returns a small set of key colors for thumbnail previews:
+     { bg, surface, text, accent, secondary }
+
+TYPES (src/lib/types.ts — add):
+  ThemeDefinition {
+    id: string;
+    name: string;
+    author: string;
+    version: string;
+    base: "dark" | "light";
+    variables: Record<string, string>;
+    fonts?: Record<string, string>;
+    builtIn?: boolean;
+  }
+
+  ThemeValidationError {
+    field: string;
+    message: string;
+  }
+
+BUILT-IN THEMES (src/lib/themes.ts):
+Create at minimum these 7 themes as TypeScript constants:
+
+1. "cognote-dark" (current dark — extract from index.css)
+2. "cognote-light" (current light — extract from index.css)
+3. "nord" — Nord color palette, dark base
+4. "dracula" — Dracula theme colors, dark base
+5. "solarized-light" — Solarized light palette
+6. "catppuccin-mocha" — Catppuccin Mocha, dark base
+7. "rose-pine" — Rosé Pine palette, dark base
+
+For each theme: define the full set of ~50 CSS variables
+matching the existing token names from index.css. Use the
+official color palettes from each theme's documentation.
+
+SETTINGS UPDATES:
+
+Backend (settings.rs):
+- Change the `theme` field semantics: it now stores a theme ID
+  string (e.g., "cognote-dark", "nord", "my-custom-theme")
+  instead of just "dark"/"light"
+- Add `custom_theme_ids: Vec<String>` field to track user themes
+- Default theme remains "cognote-dark"
+
+Frontend (types.ts):
+- Change ThemeMode to: type ThemeMode = string
+  (any theme ID, not just "dark" | "light")
+- Add ThemeDefinition and related types
+
+Frontend (settingsStore.ts):
+- Add `activeThemeId: string` to store
+- Add `availableThemes: ThemeDefinition[]` (built-in + user)
+- Add `loadThemes()` action
+- Add `setActiveTheme(themeId: string)` action
+
+APP STARTUP (App.tsx / main.tsx):
+- On boot, read theme id from localStorage (for instant apply)
+- Load settings → apply the saved theme via themeEngine
+- If theme id not found, fall back to "cognote-dark"
+
+CSS CHANGES (index.css):
+- Keep the existing :root and html.dark blocks as the DEFAULT
+  fallback. The theme engine overrides via inline styles which
+  have higher specificity.
+- No changes needed to component CSS or utility classes.
+```
+
+**Acceptance Criteria:**
+- [ ] All 7 built-in themes apply correctly with no visual glitches
+- [ ] Theme switch is instant (no flash or delay)
+- [ ] Theme persists across app restarts
+- [ ] Missing variables in a theme fall back to base palette
+- [ ] All components render correctly in every built-in theme
+
+---
+
+### Task 9.2 — Theme Picker UI
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build the theme selection UI in Settings.
+
+FRONTEND (src/components/Settings/ThemePicker.tsx):
+
+Theme browser panel within the Settings page:
+
+1. THEME GRID:
+   - Grid of theme preview cards (3 columns)
+   - Each card shows:
+     - Theme name + author
+     - 5-color swatch strip (bg, surface, text, accent, secondary)
+     - A mini preview: tiny rectangle showing a mock sidebar +
+       content area using the theme's colors (purely CSS, ~80x50px)
+     - "Active" badge on the current theme
+     - Click to apply immediately (live preview)
+   - Group by: "Built-in" and "Custom" sections
+
+2. LIVE PREVIEW:
+   - When hovering a theme card, temporarily apply it to the app
+   - On mouse leave, revert to the active theme
+   - This gives instant visual feedback without committing
+   - Use themeEngine.applyTheme() on hover, resetTheme() on leave
+
+3. ACTIVE INDICATOR:
+   - Checkmark badge on the currently active theme card
+   - "Applied" text below the active card
+
+4. SEARCH/FILTER:
+   - Search by theme name
+   - Filter: All / Dark base / Light base
+
+SETTINGS PANEL INTEGRATION:
+- Replace the current simple dark/light toggle with the
+  ThemePicker component
+- Keep it in a dedicated "Appearance" section of Settings
+- Move any existing theme toggle references to use the new picker
+
+KEYBOARD:
+- Arrow keys navigate the theme grid
+- Enter applies the selected theme
+- Escape reverts to previous theme (if previewing)
+```
+
+**Acceptance Criteria:**
+- [ ] Theme grid shows all built-in themes with color previews
+- [ ] Hovering a theme previews it live on the whole app
+- [ ] Clicking a theme applies and persists it
+- [ ] Search and filter work correctly
+- [ ] Active theme is clearly indicated
+
+---
+
+### Task 9.3 — Custom Theme Import/Export + Editor
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Allow users to import, export, and create custom themes.
+
+FRONTEND (src/components/Settings/ThemeImportExport.tsx):
+
+IMPORT:
+- "Import Theme" button in the Custom themes section
+- Opens a file dialog (Tauri dialog plugin) filtered to .json files
+- Validates the JSON using themeEngine.validateTheme()
+- On validation errors: show a detailed error message listing
+  which fields are missing or invalid
+- On success: copies theme JSON to app_data_dir/themes/
+- Theme appears immediately in the picker grid
+- If a theme with the same id already exists, prompt:
+  "Replace existing?" / "Import as copy"
+
+EXPORT:
+- Three-dot menu on each custom theme card → "Export"
+- Opens save dialog, writes the theme JSON file
+- Also allow "Export" on built-in themes so users can use
+  them as starting points for customization
+
+SHARE:
+- "Copy theme JSON" button → copies to clipboard
+- Can paste theme JSON into an import dialog (textarea input)
+  as alternative to file import
+
+FRONTEND (src/components/Settings/ThemeEditor.tsx):
+
+A simple in-app theme editor:
+
+1. START FROM:
+   - "Create from scratch" (starts with current theme as base)
+   - "Duplicate [theme name]" (copies an existing theme)
+
+2. METADATA:
+   - Theme name (text input, required)
+   - Author (text input, defaults to "Custom")
+   - Base mode: Dark / Light (radio, required — determines
+     CSS dark/light class and fallback palette)
+
+3. COLOR EDITOR:
+   - Organized by category (same as CSS file sections):
+     § Backgrounds (bg-base, bg-surface, bg-surface-raised, bg-muted, bg-subtle, bg-inset)
+     § Text (text-primary, text-secondary, text-tertiary, text-muted)
+     § Borders (border-default, border-subtle, border-strong)
+     § Accent (accent-primary, accent-primary-hover, accent-secondary)
+     § Semantic (success, warning, error, info — each with main/subtle/text)
+     § Sidebar (sidebar-bg, sidebar-border, sidebar-item-hover, sidebar-item-active-bg/text)
+     § Inputs (input-bg, input-border)
+   - Each variable: label + color picker (native <input type="color">)
+     + hex text input for precise values
+   - LIVE PREVIEW: every color change applies immediately
+     so the user sees the app update in real-time
+
+4. FONT OVERRIDE (optional section):
+   - Font name input for heading and body
+   - Preview text sample with selected fonts
+
+5. ACTIONS:
+   - "Save Theme" → validates and saves to app_data_dir/themes/
+   - "Cancel" → reverts all preview changes
+   - "Reset to Base" → clears all overrides
+
+BACKEND:
+
+Tauri commands:
+- `list_custom_themes()` → Vec<ThemeDefinition>
+  Reads all .json files from app_data_dir/themes/, parses, returns
+- `save_custom_theme(theme_json: String)` → Result<String, String>
+  Validates and writes to app_data_dir/themes/{id}.json
+  Creates the themes/ directory if it doesn't exist
+- `delete_custom_theme(theme_id: String)` → Result<(), String>
+  Deletes the JSON file. Refuses to delete built-in themes.
+  If deleted theme was active, reverts to "cognote-dark"
+- `import_theme_file(source_path: String)` → Result<ThemeDefinition, String>
+  Reads file, validates, copies to themes directory
+- `export_theme_file(theme_id: String, destination_path: String)` → Result<(), String>
+  Writes theme JSON to the chosen path
+
+PERMISSIONS (capabilities/default.json):
+- Ensure dialog:allow-open and dialog:allow-save are in capabilities
+  for file picker dialogs
+```
+
+**Acceptance Criteria:**
+- [ ] Can import a .json theme file and it appears in picker
+- [ ] Validation catches malformed theme files with clear errors
+- [ ] Can create a new theme with live color editing
+- [ ] Color changes preview in real-time across the whole app
+- [ ] Can export themes as .json for sharing
+- [ ] Can delete custom themes (not built-in ones)
+- [ ] Duplicate detection works (same theme id)
+
+---
+
+### Task 9.4 — Developer Theme Pipeline (for shipping new themes in releases)
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Create a developer workflow for adding new themes to Cognote releases.
+
+THEME AUTHORING WORKFLOW:
+
+1. Create a new JSON file in src-tauri/resources/themes/{name}.json
+   using the ThemeDefinition schema
+2. Register it in src/lib/themes.ts by adding it to the BUILT_IN_THEMES array
+3. Build the app — the theme ships as a bundled resource
+
+BUNDLED RESOURCE SETUP (tauri.conf.json):
+- Add to bundle.resources: ["resources/themes/*.json"]
+- These files are included in the app binary and accessible
+  at runtime via the Tauri resource path API
+
+THEME REGISTRY (src/lib/themes.ts):
+- BUILT_IN_THEMES: ThemeDefinition[] — all hardcoded built-in themes
+- loadBundledThemes(): reads from Tauri resource directory at runtime
+  to discover any additional bundled .json theme files
+- This dual approach means:
+  a) Core themes are in code (always available, no I/O needed)
+  b) Extra themes can be dropped into resources/ without code changes
+
+AUTO-DISCOVERY:
+- On app start, scan BOTH:
+  1. Built-in themes (from themes.ts constants)
+  2. Bundled resource themes (from resources/themes/*.json via Tauri)
+  3. User themes (from app_data_dir/themes/*.json)
+- Merge and deduplicate by theme id
+- Built-in themes cannot be overridden by user themes with same id
+
+THEME DEVELOPMENT HELPER:
+- Add a script: scripts/validate-themes.ts
+  - Reads all .json files from src-tauri/resources/themes/
+  - Validates each against the schema
+  - Reports errors with file + field details
+  - Run as: `bun run scripts/validate-themes.ts`
+- Add to package.json: "validate-themes": "bun scripts/validate-themes.ts"
+
+DOCUMENTATION:
+- Add a THEMES.md file in the project root explaining:
+  - Theme JSON schema with all ~50 variable names
+  - How to create a theme (step-by-step)
+  - Color palette guidelines (contrast ratios for accessibility)
+  - How to submit a theme for inclusion in the app
+  - Example minimal theme (just accent colors)
+  - Example full theme (all variables)
+
+ACCESSIBILITY CHECK:
+- In the theme validation script, add WCAG AA contrast checking:
+  - text-primary on bg-base must have >= 4.5:1 ratio
+  - text-secondary on bg-surface must have >= 3:1 ratio
+  - accent-primary on bg-surface must have >= 3:1 ratio
+  - Warn (don't block) if contrast is insufficient
+```
+
+**Acceptance Criteria:**
+- [ ] Devs can add a .json file and it ships with the next build
+- [ ] Bundled themes auto-discovered on app start
+- [ ] Validation script catches schema errors
+- [ ] WCAG contrast warnings help ensure accessible themes
+- [ ] THEMES.md documents the full workflow
+- [ ] Adding a theme requires zero component code changes
+
+---
+
 ## Dependency Summary
 
 ```toml

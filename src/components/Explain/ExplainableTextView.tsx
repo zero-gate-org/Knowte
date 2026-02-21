@@ -350,7 +350,7 @@ export default function ExplainableTextView({
     if (!lectureId) {
       pushToast({
         kind: "warning",
-        message: "Select a lecture before adding flashcards.",
+        message: "Select a knowte before adding flashcards.",
       });
       return;
     }

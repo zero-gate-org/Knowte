@@ -64,7 +64,7 @@ export default function TranscriptViewer({
       <div className="mx-auto max-w-[900px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 shadow-sm">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Transcript</h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Process a lecture from the Upload page to generate a transcript.
+          Process a knowte from the Upload page to generate a transcript.
         </p>
       </div>
     );
@@ -134,7 +134,7 @@ export default function TranscriptViewer({
           <p className="text-sm text-[var(--text-muted)]">
             {query
               ? "No transcript segments match your search."
-              : "No transcript segments are available for this lecture yet."}
+              : "No transcript segments are available for this knowte yet."}
           </p>
         )}
       </section>

@@ -16,7 +16,7 @@ pub fn ensure_ffmpeg_installed(app: &AppHandle) -> Result<PathBuf, String> {
     let source_path = bundled_ffmpeg_path(app)
         .or_else(find_ffmpeg_on_path)
         .ok_or_else(|| {
-            "Unable to provision ffmpeg automatically. Reinstall Cognote or install ffmpeg on your system PATH.".to_string()
+            "Unable to provision ffmpeg automatically. Reinstall Knowte or install ffmpeg on your system PATH.".to_string()
         })?;
 
     if let Some(parent) = install_path.parent() {

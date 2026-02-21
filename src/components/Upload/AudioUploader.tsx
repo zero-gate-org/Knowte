@@ -618,7 +618,7 @@ export default function AudioUploader() {
           updateQueueByLecture(lectureId, { status: "processing", stage: "processing" });
 
           const estimate = await estimatePipelineWork(lectureId);
-          const estimateMessage = `This lecture will process ~${estimate.token_estimate.toLocaleString()} tokens (estimated ${estimate.estimated_minutes_min}-${estimate.estimated_minutes_max} min).`;
+          const estimateMessage = `This knowte will process ~${estimate.token_estimate.toLocaleString()} tokens (estimated ${estimate.estimated_minutes_min}-${estimate.estimated_minutes_max} min).`;
           let useCache = true;
           if (estimate.has_cached_results) {
             useCache = window.confirm(
@@ -658,7 +658,7 @@ export default function AudioUploader() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <ViewHeader
-        title="Lecture Input"
+        title="Knowte Input"
         description="Upload audio/video files, import from YouTube, or record directly from your microphone."
       />
 
@@ -666,7 +666,7 @@ export default function AudioUploader() {
         className="inline-flex rounded-lg p-1 shadow-sm"
         style={{ border: "1px solid var(--border-default)", background: "var(--bg-elevated)" }}
         role="tablist"
-        aria-label="Lecture input modes"
+        aria-label="Knowte input modes"
       >
         <button
           type="button"
@@ -773,7 +773,7 @@ export default function AudioUploader() {
           {isUploading
             ? isYoutubeImporting
               ? "Importing from YouTube..."
-              : "Importing lecture files..."
+              : "Importing knowte files..."
             : "Recording in progress..."}
         </div>
       )}
@@ -797,8 +797,8 @@ export default function AudioUploader() {
               <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>Batch Queue</h2>
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 {waitingCount > 0
-                  ? `${waitingCount} lecture${waitingCount === 1 ? "" : "s"} waiting to process.`
-                  : "No waiting lectures in queue."}
+                  ? `${waitingCount} knowte${waitingCount === 1 ? "" : "s"} waiting to process.`
+                  : "No waiting knowtes in queue."}
               </p>
             </div>
             <button

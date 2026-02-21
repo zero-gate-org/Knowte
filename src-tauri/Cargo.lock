@@ -606,33 +606,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cognote"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "cpal",
- "dirs",
- "fs2",
- "futures-util",
- "hound",
- "reqwest 0.12.28",
- "rfd",
- "rubato",
- "rusqlite",
- "serde",
- "serde_json",
- "symphonia",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "thiserror 2.0.18",
- "tokio",
- "uuid",
- "whisper-rs",
- "zip",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2252,6 +2225,33 @@ dependencies = [
  "bitflags 2.11.0",
  "serde",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "knowte"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cpal",
+ "dirs",
+ "fs2",
+ "futures-util",
+ "hound",
+ "reqwest 0.12.28",
+ "rfd",
+ "rubato",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "whisper-rs",
+ "zip",
 ]
 
 [[package]]

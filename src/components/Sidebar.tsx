@@ -1,5 +1,4 @@
 import { NavLink } from "react-router-dom";
-import appIcon from "../assets/cognote-icon.svg";
 import { useLectureStore } from "../stores";
 
 interface SidebarProps {
@@ -191,7 +190,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps)
     lectures.find((lecture) => lecture.id === currentLectureId) ?? null;
   const lectureCount = lectures.length;
   const lectureTitle =
-    currentLecture?.title?.trim() || currentLecture?.filename || "Selected Lecture";
+    currentLecture?.title?.trim() || currentLecture?.filename || "Selected Knowte";
 
   return (
     <aside
@@ -209,18 +208,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps)
         className={`${isCollapsed ? "px-2 py-3" : "px-4 py-4"}`}
         style={{ borderBottom: "1px solid var(--sidebar-border)" }}
       >
-        <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between"} gap-2`}>
-          {!isCollapsed && (
-            <div className="flex min-w-0 items-center gap-2.5">
-              <img src={appIcon} alt="Cognote app icon" className="h-5 w-5 shrink-0" />
-              <p
-                className="truncate text-sm font-semibold tracking-tight"
-                style={{ color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}
-              >
-                Cognote
-              </p>
-            </div>
-          )}
+        <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-end"}`}>
           <button
             type="button"
             onClick={onToggleCollapse}
@@ -259,7 +247,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps)
       <nav
         className={`${isCollapsed ? "p-2" : "p-3"} flex-1 overflow-y-auto`}
         role="tablist"
-        aria-label={currentLectureId ? "Lecture view navigation" : "Primary navigation"}
+        aria-label={currentLectureId ? "Knowte view navigation" : "Primary navigation"}
       >
         {currentLectureId ? (
           <ul className="space-y-0.5">
@@ -295,7 +283,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps)
                   className="px-3 text-[10px] font-semibold uppercase tracking-widest"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Lecture views
+                  Knowte views
                 </p>
               </li>
             )}

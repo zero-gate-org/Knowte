@@ -16,7 +16,7 @@ pub fn ensure_ytdlp_installed(app: &AppHandle) -> Result<PathBuf, String> {
     let source_path = bundled_ytdlp_path(app)
         .or_else(find_ytdlp_on_path)
         .ok_or_else(|| {
-            "Unable to provision yt-dlp automatically. Reinstall Cognote (bundled yt-dlp) or install yt-dlp on your system PATH.".to_string()
+            "Unable to provision yt-dlp automatically. Reinstall Knowte (bundled yt-dlp) or install yt-dlp on your system PATH.".to_string()
         })?;
 
     if let Some(parent) = install_path.parent() {

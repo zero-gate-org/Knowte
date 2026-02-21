@@ -187,8 +187,9 @@ cognote/
 | 4.4 Flashcards + Anki Export | ✅ Complete |
 | 5.x Lecture Library | ✅  Complete |
 | 6.x Polish | ✅  Complete |
-| 7.x Advanced Features | 🔲 Pending |
-| 8.x Distribution | 🔲 Pending |
+| 7.x Advanced Features | ✅  Complete |
+| 8.x Distribution | ✅ Complete |
+| 9.x Custom Theming System | 🔲 Pending |
 
 See `plan.md` for detailed task specifications and `CHANGELOG.md` for completed work.
 

@@ -180,7 +180,7 @@ export default function TranscriptEditor({
       <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 shadow-sm">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Transcript Editor</h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Process a lecture from the Upload page to edit transcript segments.
+          Process a knowte from the Upload page to edit transcript segments.
         </p>
       </div>
     );
@@ -191,7 +191,7 @@ export default function TranscriptEditor({
       <div className="rounded-lg border border-[var(--color-warning-muted)] bg-[var(--color-warning)]/10 p-4 shadow-sm">
         <h1 className="text-xl font-semibold text-[var(--color-warning)]">Transcript Editor</h1>
         <p className="mt-2 text-sm text-[var(--color-warning)]">
-          Transcript editing is unavailable for this lecture. Re-process the lecture
+          Transcript editing is unavailable for this knowte. Re-process the knowte
           transcript to enable editing.
         </p>
       </div>
@@ -225,7 +225,7 @@ export default function TranscriptEditor({
           <p className="text-sm text-[var(--text-muted)]">
             {query
               ? "No transcript segments match your search."
-              : "No transcript segments are available for this lecture."}
+              : "No transcript segments are available for this knowte."}
           </p>
         ) : (
           <div className="space-y-3">

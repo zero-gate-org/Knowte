@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-const SIDEBAR_COLLAPSE_STORAGE_KEY = "cognote.sidebar.collapsed";
+const SIDEBAR_COLLAPSE_STORAGE_KEY = "knowte.sidebar.collapsed";
 
 interface UiState {
   isSidebarCollapsed: boolean;

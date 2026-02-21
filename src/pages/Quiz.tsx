@@ -14,8 +14,8 @@ function EmptyState({ reason }: { reason: "no-lecture" | "no-quiz" }) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-[var(--text-muted)] space-y-2">
         <span className="text-4xl">🧠</span>
-        <p className="text-sm">No lecture selected.</p>
-        <p className="text-xs">Upload and process a lecture to take a quiz.</p>
+        <p className="text-sm">No knowte selected.</p>
+        <p className="text-xs">Add and process a knowte to take a quiz.</p>
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function Quiz() {
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
           title="Interactive Quiz"
-          description="Practice key concepts from your lecture."
+          description="Practice key concepts from your knowte."
         />
         <EmptyState reason="no-lecture" />
       </div>
@@ -149,7 +149,7 @@ export default function Quiz() {
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
           title="Interactive Quiz"
-          description="Practice key concepts from your lecture."
+          description="Practice key concepts from your knowte."
         />
         <QuizSkeleton />
       </div>
@@ -161,7 +161,7 @@ export default function Quiz() {
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
           title="Interactive Quiz"
-          description="Practice key concepts from your lecture."
+          description="Practice key concepts from your knowte."
         />
         <div className="bg-[var(--color-error-muted)] border border-[var(--color-error-muted)] rounded-lg p-4 text-[var(--color-error)] text-sm">
           {error}
@@ -182,7 +182,7 @@ export default function Quiz() {
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
           title="Interactive Quiz"
-          description="Practice key concepts from your lecture."
+          description="Practice key concepts from your knowte."
           actions={
             <button
               onClick={handleRegenerateQuiz}

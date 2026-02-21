@@ -1,4 +1,4 @@
-export const APP_NAME = "Cognote";
+export const APP_NAME = "Knowte";
 
 export const SUPPORTED_AUDIO_EXTENSIONS = [
   "mp3",

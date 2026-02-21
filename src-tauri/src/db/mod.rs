@@ -56,7 +56,7 @@ pub fn init_database(app: &AppHandle) -> Result<AppDatabase, DbError> {
         .map_err(|_| DbError::AppDataDirUnavailable)?;
     fs::create_dir_all(&app_data_dir).map_err(|_| DbError::AppDataDirUnavailable)?;
 
-    let database = AppDatabase::new(app_data_dir.join("cognote.sqlite"));
+    let database = AppDatabase::new(app_data_dir.join("knowte.sqlite"));
     let connection = database.connect()?;
     schema::run_migrations(&connection)?;
     Ok(database)

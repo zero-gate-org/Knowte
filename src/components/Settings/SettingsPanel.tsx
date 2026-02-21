@@ -179,7 +179,7 @@ export default function SettingsPanel() {
               value={formData.export_path}
               onChange={(e) => updateField("export_path", e.target.value)}
               className="input w-full"
-              placeholder="~/Documents/Cognote"
+              placeholder="~/Documents/Knowte"
             />
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Default location for exported files
@@ -199,9 +199,6 @@ export default function SettingsPanel() {
                 className="sr-only"
               />
               <div
-                onClick={() =>
-                  updateField("delete_audio_after_processing", !formData.delete_audio_after_processing)
-                }
                 className="toggle-track cursor-pointer"
                 data-checked={formData.delete_audio_after_processing || undefined}
               >
@@ -222,7 +219,7 @@ export default function SettingsPanel() {
             ) : storageUsage ? (
               <div className="space-y-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
                 <p>App data: <span style={{ color: "var(--text-primary)" }}>{formatBytes(storageUsage.app_data_bytes)}</span></p>
-                <p>Lectures audio: <span style={{ color: "var(--text-primary)" }}>{formatBytes(storageUsage.lectures_bytes)}</span></p>
+                <p>Knowtes audio: <span style={{ color: "var(--text-primary)" }}>{formatBytes(storageUsage.lectures_bytes)}</span></p>
                 <p>Prepared audio: <span style={{ color: "var(--text-primary)" }}>{formatBytes(storageUsage.prepared_audio_bytes)}</span></p>
                 <p>Free disk space: <span style={{ color: "var(--text-primary)" }}>{formatBytes(storageUsage.free_bytes)}</span></p>
                 <p className="break-all" style={{ color: "var(--text-muted)" }}>Path: {storageUsage.app_data_dir}</p>
@@ -254,7 +251,6 @@ export default function SettingsPanel() {
                 className="sr-only"
               />
               <div
-                onClick={() => updateField("enable_research", !formData.enable_research)}
                 className="toggle-track cursor-pointer"
                 data-checked={formData.enable_research || undefined}
               >
@@ -266,8 +262,8 @@ export default function SettingsPanel() {
                 Enable research paper search (requires internet)
               </p>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                When enabled, Cognote queries the Semantic Scholar API to find papers
-                related to your lecture content. This is the only external network call
+                When enabled, Knowte queries the Semantic Scholar API to find papers
+                related to your knowte content. This is the only external network call
                 the app makes.
               </p>
             </div>
@@ -298,7 +294,7 @@ export default function SettingsPanel() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Lecture Views</p>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Knowte Views</p>
               {LECTURE_VIEW_SHORTCUTS.map((shortcut) => (
                 <div
                   key={shortcut.key}

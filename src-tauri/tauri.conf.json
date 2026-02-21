@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "cognote",
+  "productName": "Knowte",
   "version": "0.1.0",
-  "identifier": "com.aditya.cognote",
+  "identifier": "com.knowte.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "Cognote",
+        "title": "Knowte",
         "width": 1200,
         "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
         "center": true,
         "decorations": false
@@ -45,6 +47,42 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["mp3", "wav", "m4a", "ogg", "webm", "mp4", "mov", "mkv"],
+        "name": "Audio/Video Lecture",
+        "description": "Open with Knowte",
+        "mimeType": "audio/*"
+      }
+    ],
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "languages": ["English"]
+      }
+    },
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "rpm": {}
+    },
+    "category": "Education",
+    "shortDescription": "Transform lecture audio into structured learning materials",
+    "longDescription": "Knowte transforms lecture audio and video into structured notes, quizzes, flashcards, and mind maps using local AI — completely private, fully offline.",
+    "copyright": "Copyright © 2026 Knowte Contributors",
+    "license": "MIT"
   }
 }

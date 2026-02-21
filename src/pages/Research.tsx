@@ -87,8 +87,8 @@ export default function Research() {
         />
         <div className="flex h-64 flex-col items-center justify-center space-y-2 text-[var(--text-muted)]">
           <span className="text-4xl">🔬</span>
-          <p className="text-sm">No lecture selected.</p>
-          <p className="text-xs">Upload and process a lecture to find related papers.</p>
+          <p className="text-sm">No knowte selected.</p>
+          <p className="text-xs">Add and process a knowte to find related papers.</p>
         </div>
       </div>
     );
