@@ -182,6 +182,7 @@ cognote/
 | 3.2 Pipeline Orchestrator | ✅ Complete |
 | 3.3 Semantic Scholar Integration | ✅ Complete |
 | 4.1 Structured Notes View | ✅ Complete |
+| 4.2 Interactive Quiz | ✅ Complete |
 | 4.x Output Views (remaining) | 🔲 Pending |
 | 5.x Lecture Library | 🔲 Pending |
 | 6.x Polish | 🔲 Pending |

@@ -520,3 +520,25 @@ pub fn get_papers(
     }
 }
 
+// ─── Quiz Attempts ────────────────────────────────────────────────────────────
+
+/// Insert a record of one quiz attempt and return its generated id.
+pub fn insert_quiz_attempt(
+    connection: &Connection,
+    lecture_id: &str,
+    answers_json: &str,
+    score: i64,
+    total_questions: i64,
+) -> rusqlite::Result<String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    connection.execute(
+        r#"
+        INSERT INTO quiz_attempts (id, lecture_id, answers_json, score, total_questions, attempted_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "#,
+        params![id, lecture_id, answers_json, score, total_questions, now],
+    )?;
+    Ok(id)
+}
+

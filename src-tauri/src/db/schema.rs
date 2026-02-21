@@ -78,6 +78,16 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             created_at TEXT NOT NULL,
             FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS quiz_attempts (
+            id TEXT PRIMARY KEY,
+            lecture_id TEXT NOT NULL,
+            answers_json TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            total_questions INTEGER NOT NULL,
+            attempted_at TEXT NOT NULL,
+            FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
+        );
         "#,
     )
 

@@ -2,6 +2,18 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 4.2] - 2026-02-21
+- Added: `src/components/Quiz/QuestionCard.tsx` — reusable question display component; handles all three question types (multiple_choice with radio-card options, true_false with two large buttons, short_answer with textarea); difficulty badge (easy/medium/hard with colour coding); post-submit feedback with green ✓ correct / red ✗ incorrect highlight, correct answer reveal, and explanation text
+- Added: `src/components/Quiz/QuizPlayer.tsx` — main quiz player with card-based layout; progress bar (answered/total); navigation dots at bottom with colour states (grey=unanswered, violet=current, green=correct, red=wrong, amber=self-graded short answer); Previous/Next arrow buttons + smart "Next Question" advance to first unanswered; "Submit Answer" button (disabled until answer selected); "See Results" button when all questions answered; "Generate New Quiz" link at bottom
+- Added: `src/components/Quiz/QuizResults.tsx` — results screen with circular SVG progress indicator (green ≥70%, amber ≥50%, red <50%); score X/N and percentage; retake and regenerate buttons; scrollable question-review list with ✓/✗ icons; expandable explanations (click) for wrong answers showing user answer, correct answer, and explanation text
+- Added: `src/components/Quiz/index.ts` — barrel exports for all Quiz components and types
+- Changed: `src/pages/Quiz.tsx` — full interactive quiz page; loads quiz JSON on lecture change via `getQuiz`; tracks `showResults`/`completedAnswers`/`completedScore` state; transitions between QuizPlayer and QuizResults; calls `saveQuizAttempt` on completion (non-blocking); empty/loading/error states; regenerate button in header
+- Changed: `src/lib/tauriApi.ts` — added `regenerateQuiz` and `saveQuizAttempt` typed wrappers
+- Changed: `src-tauri/src/db/schema.rs` — added `quiz_attempts` table (id, lecture_id, answers_json, score, total_questions, attempted_at)
+- Changed: `src-tauri/src/db/queries.rs` — added `insert_quiz_attempt` query helper
+- Added: `src-tauri/src/commands/pipeline.rs` — `regenerate_quiz` command: loads transcript, truncates to 16k chars, calls quiz LLM prompt with JSON retry, upserts to DB, returns new JSON; `save_quiz_attempt` command: inserts attempt record to DB, returns generated id
+- Changed: `src-tauri/src/lib.rs` — registered `regenerate_quiz` and `save_quiz_attempt` in invoke handler
+
 ## [Task 4.1] - 2026-02-21
 - Added: `src/components/Notes/StructuredNotes.tsx` — renders `StructuredNotes` JSON as a document: collapsible topic sections (h2 heading, coloured bullet key-points, details paragraph, styled example boxes), two-column alternating-row Key Terms table, numbered Takeaways highlight box
 - Added: `src/components/Notes/NotesExport.tsx` — export button row: "Copy as Markdown" (client-side conversion + clipboard), "Download as Markdown" (calls `export_notes_markdown` Rust command which shows native save dialog), "Download as PDF" (`window.print()` with print-hide CSS); toast notification on success/failure

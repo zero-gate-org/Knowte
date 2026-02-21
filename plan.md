@@ -1352,8 +1352,8 @@ PROMPT FOR AGENT:
 Configure build and distribution for Windows, macOS, and Linux.
 
 TAURI BUILD CONFIG (tauri.conf.json):
-- App name: "LectureToLearn"
-- Identifier: "com.lecturetolearn.app"
+- App name: "Cognote"
+- Identifier: "com.cognote.app"
 - Version from package.json
 - Configure bundling:
   - Windows: .msi installer + .exe

@@ -175,3 +175,26 @@ export async function regenerateNotes(lectureId: string): Promise<string | null>
 export async function exportNotesMarkdown(lectureId: string): Promise<string | null> {
   return invoke<string | null>("export_notes_markdown", { lectureId });
 }
+
+// ─── Quiz Commands ────────────────────────────────────────────────────────────
+
+/**
+ * Re-run the quiz generation stage for a lecture using the current LLM
+ * settings.  Returns the new quiz JSON string, or null on error.
+ */
+export async function regenerateQuiz(lectureId: string): Promise<string | null> {
+  return invoke<string | null>("regenerate_quiz", { lectureId });
+}
+
+/**
+ * Save a quiz attempt record (answers JSON and score) to the database.
+ * Returns the id of the saved record.
+ */
+export async function saveQuizAttempt(
+  lectureId: string,
+  answersJson: string,
+  score: number,
+  totalQuestions: number,
+): Promise<string> {
+  return invoke<string>("save_quiz_attempt", { lectureId, answersJson, score, totalQuestions });
+}
