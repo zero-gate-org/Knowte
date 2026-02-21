@@ -208,7 +208,7 @@ pub async fn regenerate_notes(
         transcript_rec.full_text.clone()
     };
 
-    let client = OllamaClient::new(settings.ollama_url.clone());
+    let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
     let prompt = prompt_templates::structured_notes_prompt(&context_text, &level);
 
     // ── Call LLM ─────────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ pub async fn regenerate_quiz(app: AppHandle, lecture_id: String) -> Result<Optio
         transcript_rec.full_text.clone()
     };
 
-    let client = OllamaClient::new(settings.ollama_url.clone());
+    let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
     let prompt = prompt_templates::quiz_prompt(&context_text, &level);
 
     // ── Call LLM ─────────────────────────────────────────────────────────────
@@ -393,7 +393,7 @@ pub async fn regenerate_mindmap(
         transcript_rec.full_text.clone()
     };
 
-    let client = OllamaClient::new(settings.ollama_url.clone());
+    let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
     let prompt = prompt_templates::mindmap_prompt(&context_text, &level);
 
     let raw = client

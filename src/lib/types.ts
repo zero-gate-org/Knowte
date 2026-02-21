@@ -2,6 +2,7 @@ export interface Settings {
   ollama_url: string;
   whisper_model: string;
   llm_model: string;
+  llm_timeout_seconds: number;
   personalization_level: string;
   language: string;
   export_path: string;
@@ -146,7 +147,7 @@ export interface PipelineStageEvent {
   lecture_id: string;
   /** e.g. "summary" | "notes" | "quiz" | "flashcards" | "mindmap" | "keywords" | "pipeline" */
   stage: string;
-  /** "starting" | "complete" | "error" */
+  /** "starting" | "complete" | "error" | "warning" */
   status: string;
   preview?: string;
   error?: string;
@@ -238,6 +239,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ollama_url: "http://localhost:11434",
   whisper_model: "base",
   llm_model: "llama3.1:8b",
+  llm_timeout_seconds: 300,
   personalization_level: "undergraduate_2nd_year",
   language: "en",
   export_path: "",

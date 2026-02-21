@@ -228,6 +228,22 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
         }
     };
 
+    let transcript_word_count = transcript_text.split_whitespace().count();
+    if transcript_word_count < 100 {
+        emit_stage(
+            &app,
+            &lecture_id,
+            "pipeline",
+            "warning",
+            None,
+            Some(
+                "Transcript has fewer than 100 words, so generated results may be limited."
+                    .to_string(),
+            ),
+            0,
+        );
+    }
+
     // ── Load settings ────────────────────────────────────────────────────────
     let settings = match get_settings(app.clone()) {
         Ok(s) => s,
@@ -239,7 +255,7 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
-    let client = OllamaClient::new(settings.ollama_url.clone());
+    let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
 
     // Mark lecture as processing
     if let Ok(conn) = db.connect() {

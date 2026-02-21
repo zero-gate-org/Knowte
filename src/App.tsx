@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components";
+import { ToastViewport } from "./components/Toast";
 import { listLectures } from "./lib/tauriApi";
 import type { Lecture, LectureSummary } from "./lib/types";
 import {
@@ -100,6 +101,7 @@ function App() {
   return (
     <BrowserRouter>
       <AppLayout />
+      <ToastViewport />
     </BrowserRouter>
   );
 }

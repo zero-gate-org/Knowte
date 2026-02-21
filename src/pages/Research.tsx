@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { PaperSkeleton } from "../components/Skeletons";
 import { PaperList } from "../components/Research";
 import { getLecturePapers, searchRelatedPapers } from "../lib/tauriApi";
 import type { Paper } from "../lib/types";
-import { useLectureStore } from "../stores/lectureStore";
-import { useSettingsStore } from "../stores";
+import { useLectureStore, useSettingsStore, useToastStore } from "../stores";
 
 export default function Research() {
   const { currentLectureId, lectures } = useLectureStore();
   const { settings } = useSettingsStore();
+  const pushToast = useToastStore((state) => state.pushToast);
 
   const currentLecture = lectures.find((l) => l.id === currentLectureId) ?? null;
 
@@ -49,12 +50,31 @@ export default function Research() {
     try {
       const results = await searchRelatedPapers(currentLectureId);
       setPapers(results);
+      pushToast({
+        kind: "success",
+        message: `Found ${results.length} related paper${results.length === 1 ? "" : "s"}.`,
+      });
     } catch (err) {
-      setError(typeof err === "string" ? err : "Failed to fetch papers. Check your connection.");
+      const message = err instanceof Error ? err.message : String(err);
+      const lower = message.toLowerCase();
+      const isNetworkFailure =
+        lower.includes("request failed") ||
+        lower.includes("timed out") ||
+        lower.includes("connection") ||
+        lower.includes("network");
+      setError(
+        isNetworkFailure
+          ? "Research paper search requires internet access. Check your connection and retry."
+          : message,
+      );
+      pushToast({
+        kind: "error",
+        message: "Paper search failed. Verify internet access and try again.",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [currentLectureId]);
+  }, [currentLectureId, pushToast]);
 
   // ── No lecture selected ────────────────────────────────────────────────────
   if (!currentLectureId || !currentLecture) {
@@ -105,6 +125,13 @@ export default function Research() {
           <div>
             <p className="font-medium">Search failed</p>
             <p className="text-xs mt-0.5 text-red-400">{error}</p>
+            <button
+              type="button"
+              onClick={() => void handleSearch()}
+              className="mt-3 rounded-md bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-600"
+            >
+              Retry Search
+            </button>
           </div>
         </div>
       )}
@@ -130,9 +157,11 @@ export default function Research() {
       )}
 
       {/* Paper list */}
-      {(papers.length > 0 || isLoading) && (
+      {papers.length > 0 && (
         <PaperList papers={papers} isLoading={isLoading} onRefresh={handleSearch} />
       )}
+
+      {isLoading && papers.length === 0 && <PaperSkeleton />}
 
       {/* Internet disclaimer */}
       <p className="text-xs text-slate-600 pt-2">

@@ -9,6 +9,8 @@ pub struct Settings {
     pub ollama_url: String,
     pub whisper_model: String,
     pub llm_model: String,
+    #[serde(default = "Settings::default_llm_timeout_seconds")]
+    pub llm_timeout_seconds: u64,
     pub personalization_level: String,
     pub language: String,
     pub export_path: String,
@@ -27,6 +29,7 @@ impl Default for Settings {
             ollama_url: "http://localhost:11434".to_string(),
             whisper_model: "base".to_string(),
             llm_model: "llama3.1:8b".to_string(),
+            llm_timeout_seconds: Self::default_llm_timeout_seconds(),
             personalization_level: "undergraduate_2nd_year".to_string(),
             language: "en".to_string(),
             export_path,
@@ -38,6 +41,10 @@ impl Default for Settings {
 impl Settings {
     fn default_enable_research() -> bool {
         true
+    }
+
+    fn default_llm_timeout_seconds() -> u64 {
+        300
     }
 }
 
@@ -58,69 +65,72 @@ pub struct OllamaStatus {
     pub error: Option<String>,
 }
 
-fn get_settings_path(app: &AppHandle) -> PathBuf {
+fn get_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .expect("Failed to get app data dir");
-    fs::create_dir_all(&app_data_dir).ok();
-    app_data_dir.join("settings.json")
+        .map_err(|_| "Unable to resolve the app data directory.".to_string())?;
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|_| "Unable to create the app data directory.".to_string())?;
+    Ok(app_data_dir.join("settings.json"))
 }
 
 #[tauri::command]
-pub async fn check_ollama_status(ollama_url: String) -> OllamaStatus {
+pub async fn check_ollama_status(ollama_url: String) -> Result<OllamaStatus, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
-        .ok();
+        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
 
-    let Some(client) = client else {
-        return OllamaStatus {
+    if ollama_url.trim().is_empty() {
+        return Ok(OllamaStatus {
             connected: false,
             models: vec![],
-            error: Some("Failed to create HTTP client".to_string()),
-        };
-    };
+            error: Some("Ollama URL is empty. Enter a valid URL and try again.".to_string()),
+        });
+    }
 
     let url = format!("{}/api/tags", ollama_url);
 
-    match client.get(&url).send().await {
+    let status = match client.get(&url).send().await {
         Ok(response) => {
             if response.status().is_success() {
                 match response.json::<OllamaTagsResponse>().await {
                     Ok(data) => {
                         let models: Vec<String> = data.models.into_iter().map(|m| m.name).collect();
-                        OllamaStatus {
+                        Ok(OllamaStatus {
                             connected: true,
                             models,
                             error: None,
-                        }
+                        })
                     }
-                    Err(e) => OllamaStatus {
+                    Err(e) => Ok(OllamaStatus {
                         connected: false,
                         models: vec![],
                         error: Some(format!("Failed to parse response: {}", e)),
-                    },
+                    }),
                 }
             } else {
-                OllamaStatus {
+                Ok(OllamaStatus {
                     connected: false,
                     models: vec![],
                     error: Some(format!("HTTP error: {}", response.status())),
-                }
+                })
             }
         }
-        Err(e) => OllamaStatus {
+        Err(e) => Ok(OllamaStatus {
             connected: false,
             models: vec![],
             error: Some(format!("Connection failed: {}. Is Ollama running?", e)),
-        },
-    }
+        }),
+    };
+
+    status
 }
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
-    let settings_path = get_settings_path(&app);
+    let settings_path = get_settings_path(&app)?;
 
     if settings_path.exists() {
         let content = fs::read_to_string(&settings_path)
@@ -140,7 +150,7 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 
 #[tauri::command]
 pub fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
-    let settings_path = get_settings_path(&app);
+    let settings_path = get_settings_path(&app)?;
     let content = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
     fs::write(&settings_path, &content).map_err(|e| format!("Failed to write settings: {}", e))?;

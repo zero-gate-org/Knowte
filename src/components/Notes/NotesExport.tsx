@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { StructuredNotes } from "../../lib/types";
 import { exportNotesMarkdown } from "../../lib/tauriApi";
+import { useToastStore } from "../../stores";
 
 // ─── HTML for Print / PDF ─────────────────────────────────────────────────────
 
@@ -203,24 +204,6 @@ function notesToMarkdown(notes: StructuredNotes, summary?: string): string {
   return lines.join("\n");
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-interface ToastState {
-  message: string;
-  type: "success" | "error";
-}
-
-function useToast() {
-  const [toast, setToast] = useState<ToastState | null>(null);
-
-  function showToast(message: string, type: "success" | "error") {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }
-
-  return { toast, showToast };
-}
-
 // ─── NotesExport Component ────────────────────────────────────────────────────
 
 export interface NotesExportProps {
@@ -230,16 +213,16 @@ export interface NotesExportProps {
 }
 
 export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
-  const { toast, showToast } = useToast();
+  const pushToast = useToastStore((state) => state.pushToast);
   const [savingMd, setSavingMd] = useState(false);
 
   async function handleCopyMarkdown() {
     try {
       const md = notesToMarkdown(notes, summary);
       await navigator.clipboard.writeText(md);
-      showToast("Copied to clipboard!", "success");
+      pushToast({ kind: "success", message: "Copied notes markdown to clipboard." });
     } catch {
-      showToast("Failed to copy to clipboard", "error");
+      pushToast({ kind: "error", message: "Failed to copy markdown to clipboard." });
     }
   }
 
@@ -249,10 +232,10 @@ export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
     try {
       const saved = await exportNotesMarkdown(lectureId);
       if (saved) {
-        showToast("Markdown file saved!", "success");
+        pushToast({ kind: "success", message: "Markdown file exported successfully." });
       }
     } catch (e) {
-      showToast(`Export failed: ${String(e)}`, "error");
+      pushToast({ kind: "error", message: `Markdown export failed: ${String(e)}` });
     } finally {
       setSavingMd(false);
     }
@@ -313,19 +296,6 @@ export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
           <span>🖨️</span> Download as PDF
         </button>
       </div>
-
-      {/* Toast notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-xl text-sm font-medium transition-all ${
-            toast.type === "success"
-              ? "bg-emerald-700 text-emerald-50"
-              : "bg-red-700 text-red-50"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
     </>
   );
 }

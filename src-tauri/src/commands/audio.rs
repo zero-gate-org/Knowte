@@ -2,6 +2,7 @@ use crate::db::queries::{upsert_lecture, LectureRecord};
 use crate::db::AppDatabase;
 use chrono::Utc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use fs2::available_space;
 use serde::Serialize;
 use std::fs::{self, File};
 use std::io::BufWriter;
@@ -20,6 +21,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 const SUPPORTED_EXTENSIONS: [&str; 6] = ["mp3", "wav", "m4a", "ogg", "webm", "mp4"];
+const MIN_RECORDING_FREE_SPACE_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AudioFileMetadata {
@@ -48,11 +50,15 @@ enum AudioError {
     UnsupportedExtension(String),
     #[error("Unable to access the app data directory.")]
     AppDataDirUnavailable,
+    #[error("Unable to check available disk space.")]
+    DiskSpaceCheckFailed,
+    #[error("Not enough free disk space to save audio data. Free up space and try again.")]
+    DiskSpaceInsufficient,
     #[error("Failed to save the audio file.")]
     SaveFailed,
-    #[error("Unable to read audio metadata.")]
+    #[error("Unable to read audio metadata. The file may be corrupt or unsupported.")]
     MetadataReadFailed,
-    #[error("No audio track was found in the selected file.")]
+    #[error("No readable audio track was found. The file may be corrupt or unsupported.")]
     MissingAudioTrack,
     #[error("No recording is currently in progress.")]
     NoActiveRecording,
@@ -142,6 +148,10 @@ fn accept_audio_file_impl(
     let extension = get_extension(&source_path)?;
     let id = Uuid::new_v4().to_string();
     let lectures_dir = get_lectures_dir(app)?;
+    let source_size = fs::metadata(&source_path)
+        .map_err(|_| AudioError::MetadataReadFailed)?
+        .len();
+    ensure_available_space(&lectures_dir, source_size)?;
     let destination_path = lectures_dir.join(format!("{id}.{extension}"));
 
     fs::copy(&source_path, &destination_path).map_err(|_| AudioError::SaveFailed)?;
@@ -168,6 +178,7 @@ fn start_recording_impl(app: &AppHandle, state: &RecordingState) -> Result<Strin
 
     let recording_id = Uuid::new_v4().to_string();
     let lectures_dir = get_lectures_dir(app)?;
+    ensure_available_space(&lectures_dir, MIN_RECORDING_FREE_SPACE_BYTES)?;
     let recording_path = lectures_dir.join(format!("{recording_id}.wav"));
     let thread_app = app.clone();
     let thread_recording_id = recording_id.clone();
@@ -585,6 +596,14 @@ fn get_extension(path: &Path) -> Result<String, AudioError> {
     } else {
         Err(AudioError::UnsupportedExtension(extension))
     }
+}
+
+fn ensure_available_space(directory: &Path, required_bytes: u64) -> Result<(), AudioError> {
+    let free_space = available_space(directory).map_err(|_| AudioError::DiskSpaceCheckFailed)?;
+    if free_space < required_bytes {
+        return Err(AudioError::DiskSpaceInsufficient);
+    }
+    Ok(())
 }
 
 fn persist_lecture_metadata(

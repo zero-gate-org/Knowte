@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { transcribeAudio, startPipeline } from "../../lib/tauriApi";
-import { useLectureStore } from "../../stores";
+import { useLectureStore, useToastStore } from "../../stores";
 import type { AudioFileMetadata, Lecture } from "../../lib/types";
 import DropZone from "./DropZone";
 import LiveRecorder from "./LiveRecorder";
@@ -46,6 +46,7 @@ export default function AudioUploader() {
   const [latestMetadata, setLatestMetadata] = useState<AudioFileMetadata | null>(null);
   const [processHint, setProcessHint] = useState<string | null>(null);
   const navigate = useNavigate();
+  const pushToast = useToastStore((state) => state.pushToast);
 
   const {
     addLecture,
@@ -68,6 +69,7 @@ export default function AudioUploader() {
     setLatestMetadata(metadata);
     setProcessHint(null);
     setError(null);
+    pushToast({ kind: "success", message: "Audio imported successfully." });
   };
 
   const handleProcessLecture = async () => {
@@ -99,6 +101,7 @@ export default function AudioUploader() {
 
       // Navigate to the pipeline progress view
       navigate(`/lecture/${lectureId}/pipeline`);
+      pushToast({ kind: "info", message: "Transcription complete. Pipeline started." });
     } catch (transcriptionError) {
       const message =
         transcriptionError instanceof Error
@@ -107,6 +110,7 @@ export default function AudioUploader() {
       updateLecture(lectureId, { status: "error", error: message });
       setError(message);
       setProcessHint("Processing failed. See error details above.");
+      pushToast({ kind: "error", message });
     } finally {
       setProcessingLecture(false);
     }

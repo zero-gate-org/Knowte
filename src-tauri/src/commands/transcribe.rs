@@ -7,7 +7,6 @@ use crate::db::AppDatabase;
 use chrono::Utc;
 use futures_util::StreamExt;
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
-use reqwest::Url;
 use rubato::{FftFixedInOut, Resampler};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
@@ -28,6 +27,8 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 
 const TARGET_SAMPLE_RATE: u32 = 16_000;
 const WHISPER_MODEL_REPOSITORY: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+const SILENCE_AVERAGE_THRESHOLD: f32 = 0.0005;
+const SILENCE_PEAK_THRESHOLD: f32 = 0.01;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgressEvent {
@@ -73,7 +74,7 @@ enum TranscribeError {
     WhisperModelDirUnavailable,
     #[error("Unable to download whisper model.")]
     WhisperModelDownloadFailed,
-    #[error("The selected whisper model has not been downloaded yet.")]
+    #[error("The selected whisper model has not been downloaded yet. Download it from Settings before transcribing.")]
     WhisperModelMissing,
     #[error("Unable to read transcription settings: {0}")]
     SettingsReadFailed(String),
@@ -93,10 +94,16 @@ enum TranscribeError {
     AudioResampleFailed,
     #[error("Unable to read converted WAV audio.")]
     WavReadFailed,
+    #[error(
+        "The audio appears to be silent or empty. Record again or choose a clearer audio file."
+    )]
+    SilentAudioDetected,
     #[error("Unable to initialize whisper.")]
     WhisperInitFailed,
     #[error("Whisper transcription failed.")]
     WhisperTranscriptionFailed,
+    #[error("The transcript is empty. The audio may be silent or too unclear to transcribe.")]
+    EmptyTranscript,
     #[error("Unable to save transcript to database.")]
     TranscriptSaveFailed,
     #[error("Transcript not found for id: {0}.")]
@@ -109,8 +116,6 @@ enum TranscribeError {
     TranscriptUpdateFailed,
     #[error("Unable to resolve lecture audio file.")]
     LectureAudioFileUnavailable,
-    #[error("Unable to create lecture audio URL.")]
-    LectureAudioUrlFailed,
     #[error("Unable to authorize audio path for asset protocol.")]
     AssetScopeUpdateFailed,
     #[error("Background transcription worker failed.")]
@@ -245,7 +250,13 @@ fn get_lecture_audio_url_impl(
         .map_err(|_| TranscribeError::LectureDataUnavailable)?
         .ok_or_else(|| TranscribeError::LectureNotFound(lecture_id.clone()))?;
 
-    let audio_path = PathBuf::from(&lecture.audio_path);
+    // Prefer the 16kHz mono WAV prepared for Whisper, which is generally more
+    // reliable for embedded webview playback than arbitrary source formats.
+    let preferred_path = prepared_audio_path(app, &lecture_id)
+        .filter(|path| path.exists())
+        .unwrap_or_else(|| PathBuf::from(&lecture.audio_path));
+
+    let audio_path = preferred_path;
     if !audio_path.exists() {
         return Err(TranscribeError::LectureAudioFileUnavailable);
     }
@@ -258,9 +269,16 @@ fn get_lecture_audio_url_impl(
         .allow_file(&canonical_path)
         .map_err(|_| TranscribeError::AssetScopeUpdateFailed)?;
 
-    let file_url =
-        Url::from_file_path(&canonical_path).map_err(|_| TranscribeError::LectureAudioUrlFailed)?;
-    Ok(format!("asset://localhost{}", file_url.path()))
+    Ok(canonical_path.to_string_lossy().to_string())
+}
+
+fn prepared_audio_path(app: &AppHandle, lecture_id: &str) -> Option<PathBuf> {
+    let app_data_dir = app.path().app_data_dir().ok()?;
+    Some(
+        app_data_dir
+            .join("prepared-audio")
+            .join(format!("{lecture_id}-16khz-mono.wav")),
+    )
 }
 
 fn get_lecture_transcript_impl(
@@ -425,54 +443,71 @@ fn transcribe_audio_impl(
     model_used: String,
 ) -> Result<TranscriptionResult, TranscribeError> {
     let database = AppDatabase::new(db_path);
-    let connection = database
-        .connect()
-        .map_err(|_| TranscribeError::LectureDataUnavailable)?;
-    let lecture = get_lecture_by_id(&connection, &lecture_id)
-        .map_err(|_| TranscribeError::LectureDataUnavailable)?
-        .ok_or_else(|| TranscribeError::LectureNotFound(lecture_id.clone()))?;
-    update_lecture_status(&connection, &lecture_id, "transcribing")
-        .map_err(|_| TranscribeError::LectureStatusUpdateFailed)?;
-    drop(connection);
+    let outcome = (|| -> Result<TranscriptionResult, TranscribeError> {
+        let connection = database
+            .connect()
+            .map_err(|_| TranscribeError::LectureDataUnavailable)?;
+        let lecture = get_lecture_by_id(&connection, &lecture_id)
+            .map_err(|_| TranscribeError::LectureDataUnavailable)?
+            .ok_or_else(|| TranscribeError::LectureNotFound(lecture_id.clone()))?;
+        update_lecture_status(&connection, &lecture_id, "transcribing")
+            .map_err(|_| TranscribeError::LectureStatusUpdateFailed)?;
+        drop(connection);
 
-    emit_transcription_progress(&app, &lecture_id, 3);
-    let prepared_audio_path =
-        prepare_audio_for_whisper(&app, &lecture_id, Path::new(&lecture.audio_path))?;
-    let whisper_input = read_wav_samples(&prepared_audio_path)?;
-    emit_transcription_progress(&app, &lecture_id, 10);
+        emit_transcription_progress(&app, &lecture_id, 3);
+        let prepared_audio_path =
+            prepare_audio_for_whisper(&app, &lecture_id, Path::new(&lecture.audio_path))?;
+        let whisper_input = read_wav_samples(&prepared_audio_path)?;
+        if is_silent_audio(&whisper_input) {
+            return Err(TranscribeError::SilentAudioDetected);
+        }
+        emit_transcription_progress(&app, &lecture_id, 10);
 
-    let mut transcription = run_whisper_transcription(
-        &app,
-        &lecture_id,
-        &model_path,
-        &language,
-        &whisper_input,
-        &model_used,
-    )?;
+        let mut transcription = run_whisper_transcription(
+            &app,
+            &lecture_id,
+            &model_path,
+            &language,
+            &whisper_input,
+            &model_used,
+        )?;
 
-    let segments_json = serde_json::to_string(&transcription.segments)
-        .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
-    let transcript_record = TranscriptRecord {
-        id: Uuid::new_v4().to_string(),
-        lecture_id: lecture_id.clone(),
-        full_text: transcription.full_text.clone(),
-        segments_json,
-        model_used,
-        created_at: Utc::now().to_rfc3339(),
-    };
+        if transcription.full_text.split_whitespace().next().is_none() {
+            return Err(TranscribeError::EmptyTranscript);
+        }
 
-    let connection = database
-        .connect()
-        .map_err(|_| TranscribeError::LectureDataUnavailable)?;
-    upsert_transcript(&connection, &transcript_record)
-        .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
-    update_lecture_status(&connection, &lecture_id, "processing")
-        .map_err(|_| TranscribeError::LectureStatusUpdateFailed)?;
+        let segments_json = serde_json::to_string(&transcription.segments)
+            .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
+        let transcript_record = TranscriptRecord {
+            id: Uuid::new_v4().to_string(),
+            lecture_id: lecture_id.clone(),
+            full_text: transcription.full_text.clone(),
+            segments_json,
+            model_used,
+            created_at: Utc::now().to_rfc3339(),
+        };
 
-    emit_transcription_progress(&app, &lecture_id, 100);
-    transcription.transcript_id = transcript_record.id.clone();
-    transcription.model_used = transcript_record.model_used;
-    Ok(transcription)
+        let connection = database
+            .connect()
+            .map_err(|_| TranscribeError::LectureDataUnavailable)?;
+        upsert_transcript(&connection, &transcript_record)
+            .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
+        update_lecture_status(&connection, &lecture_id, "processing")
+            .map_err(|_| TranscribeError::LectureStatusUpdateFailed)?;
+
+        emit_transcription_progress(&app, &lecture_id, 100);
+        transcription.transcript_id = transcript_record.id.clone();
+        transcription.model_used = transcript_record.model_used;
+        Ok(transcription)
+    })();
+
+    if outcome.is_err() {
+        if let Ok(connection) = database.connect() {
+            let _ = update_lecture_status(&connection, &lecture_id, "error");
+        }
+    }
+
+    outcome
 }
 
 fn run_whisper_transcription(
@@ -549,6 +584,26 @@ fn run_whisper_transcription(
         segments,
         model_used: model_used.to_string(),
     })
+}
+
+fn is_silent_audio(samples: &[f32]) -> bool {
+    if samples.is_empty() {
+        return true;
+    }
+
+    let mut sum_abs = 0.0_f32;
+    let mut peak = 0.0_f32;
+
+    for sample in samples {
+        let amplitude = sample.abs();
+        sum_abs += amplitude;
+        if amplitude > peak {
+            peak = amplitude;
+        }
+    }
+
+    let average = sum_abs / samples.len() as f32;
+    average < SILENCE_AVERAGE_THRESHOLD && peak < SILENCE_PEAK_THRESHOLD
 }
 
 fn prepare_audio_for_whisper(

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { NotesSkeleton } from "../components/Skeletons";
 import { NotesExport, StructuredNotesView } from "../components/Notes";
 import { getNotes, regenerateNotes } from "../lib/tauriApi";
 import type { StructuredNotes } from "../lib/types";
-import { useLectureStore } from "../stores/lectureStore";
+import { useLectureStore, useToastStore } from "../stores";
 
 // ─── Table of Contents ────────────────────────────────────────────────────────
 
@@ -126,6 +127,7 @@ function EmptyState({ reason }: { reason: "no-lecture" | "no-notes" }) {
 
 export default function Notes() {
   const { currentLectureId, lectures } = useLectureStore();
+  const pushToast = useToastStore((state) => state.pushToast);
   const currentLecture = lectures.find((l) => l.id === currentLectureId) ?? null;
 
   const [notes, setNotes] = useState<StructuredNotes | null>(null);
@@ -133,37 +135,39 @@ export default function Notes() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Load notes from backend ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!currentLectureId) return;
-    let cancelled = false;
+  const loadNotes = useCallback(async () => {
+    if (!currentLectureId) {
+      setNotes(null);
+      return;
+    }
 
     setNotes(null);
     setError(null);
     setIsLoading(true);
 
-    getNotes(currentLectureId)
-      .then((raw) => {
-        if (cancelled) return;
-        if (raw) {
-          try {
-            setNotes(JSON.parse(raw) as StructuredNotes);
-          } catch {
-            setError("Failed to parse notes data.");
-          }
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+    try {
+      const raw = await getNotes(currentLectureId);
+      if (!raw) {
+        setNotes(null);
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
+      try {
+        setNotes(JSON.parse(raw) as StructuredNotes);
+      } catch {
+        setError("Failed to parse notes data.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
   }, [currentLectureId]);
+
+  // ── Load notes from backend ─────────────────────────────────────────────────
+  useEffect(() => {
+    void loadNotes();
+  }, [loadNotes]);
 
   // ── Regenerate ──────────────────────────────────────────────────────────────
   const handleRegenerate = useCallback(async () => {
@@ -175,13 +179,17 @@ export default function Notes() {
       const raw = await regenerateNotes(currentLectureId);
       if (raw) {
         setNotes(JSON.parse(raw) as StructuredNotes);
+        pushToast({ kind: "success", message: "Notes regenerated successfully." });
+      } else {
+        pushToast({ kind: "warning", message: "Notes regeneration returned no data." });
       }
     } catch (err) {
       setError(typeof err === "string" ? err : "Failed to regenerate notes.");
+      pushToast({ kind: "error", message: "Failed to regenerate notes." });
     } finally {
       setIsRegenerating(false);
     }
-  }, [currentLectureId, isRegenerating]);
+  }, [currentLectureId, isRegenerating, pushToast]);
 
   // ── ToC ─────────────────────────────────────────────────────────────────────
   const tocItems = notes ? buildToc(notes, Boolean(currentLecture?.summary)) : [];
@@ -196,11 +204,9 @@ export default function Notes() {
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading notes…</span>
-        </div>
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold text-slate-100">Lecture Notes</h1>
+        <NotesSkeleton />
       </div>
     );
   }
@@ -213,6 +219,13 @@ export default function Notes() {
         <div className="bg-red-950/40 border border-red-700/50 rounded-lg p-4 text-red-300 text-sm">
           {error}
         </div>
+        <button
+          type="button"
+          onClick={() => void loadNotes()}
+          className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
+        >
+          Retry
+        </button>
       </div>
     );
   }

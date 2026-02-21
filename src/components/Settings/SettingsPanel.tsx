@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
-import { useSettingsStore } from "../../stores";
+import { useSettingsStore, useToastStore } from "../../stores";
 import ModelSelector from "./ModelSelector";
 import PersonalizationConfig from "./PersonalizationConfig";
 import type { Settings } from "../../lib/types";
 
 export default function SettingsPanel() {
-  const { settings, isLoading, isSaving, loadSettings, saveSettings, checkOllama } =
+  const { settings, isLoading, isSaving, error, loadSettings, saveSettings, checkOllama } =
     useSettingsStore();
+  const pushToast = useToastStore((state) => state.pushToast);
   const [formData, setFormData] = useState<Settings | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, [loadSettings]);
 
   useEffect(() => {
@@ -26,8 +26,15 @@ export default function SettingsPanel() {
 
     const success = await saveSettings(formData);
     if (success) {
-      setToast("Settings saved successfully");
-      setTimeout(() => setToast(null), 3000);
+      pushToast({
+        kind: "success",
+        message: "Settings saved successfully.",
+      });
+    } else {
+      pushToast({
+        kind: "error",
+        message: "Failed to save settings. Check the form values and try again.",
+      });
     }
   };
 
@@ -76,6 +83,27 @@ export default function SettingsPanel() {
             onLlmModelChange={(value) => updateField("llm_model", value)}
             onWhisperModelChange={(value) => updateField("whisper_model", value)}
           />
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-300">
+              LLM timeout (seconds)
+            </label>
+            <input
+              type="number"
+              min={30}
+              max={1800}
+              step={1}
+              value={formData.llm_timeout_seconds}
+              onChange={(e) =>
+                updateField("llm_timeout_seconds", Math.max(30, Math.min(1800, Number(e.target.value) || 300)))
+              }
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="300"
+            />
+            <p className="text-xs text-slate-400">
+              Applies to all LLM requests. Recommended range: 120-600 seconds.
+            </p>
+          </div>
         </div>
 
         <div className="p-6 bg-slate-800 rounded-lg border border-slate-700 space-y-4">
@@ -152,9 +180,9 @@ export default function SettingsPanel() {
         </div>
       </form>
 
-      {toast && (
-        <div className="fixed bottom-4 right-4 px-4 py-2 bg-green-600 text-white rounded-md shadow-lg">
-          {toast}
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
         </div>
       )}
     </div>

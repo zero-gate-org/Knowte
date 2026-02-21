@@ -2,6 +2,48 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 6.1] - 2026-02-21
+- Added: Global React error boundary (`AppErrorBoundary`) with a safe fallback screen and reload action to prevent raw crash output in the UI
+- Added: Global toast notification system (Zustand + `ToastViewport`) with success/warning/error/info variants, auto-dismiss after 5 seconds, click-to-dismiss, and a max stack of 3 toasts
+- Added: Reusable loading skeleton components (`NotesSkeleton`, `QuizSkeleton`, `FlashcardSkeleton`, `MindMapSkeleton`, `PaperSkeleton`) and integrated them into Notes, Quiz, Flashcards, Mind Map, and Research pages
+- Added: Pipeline stage failure controls in `ProgressTracker` with inline `Retry` and `Skip` actions plus a short-transcript warning banner
+- Changed: Notes/Quiz/Flashcards/Research/MindMap views now include explicit retry actions in error states and improved user-facing failure messaging
+- Changed: Settings model/schema now includes configurable `llm_timeout_seconds` (default 300), with UI control in Settings
+- Changed: LLM client resilience: configurable timeout, retry logic (max 2 retries with 3-second backoff), and updated usage across pipeline/regeneration paths
+- Changed: Backend command consistency by updating `check_ollama_status` to return `Result<T, String>`
+- Changed: Audio ingestion/transcription resilience: disk-space checks before save, clearer corrupt-audio messaging, silent/empty audio detection, and status fallback to `error` on transcription failures
+- Files modified:
+  - src-tauri/Cargo.toml
+  - src-tauri/Cargo.lock
+  - src-tauri/src/commands/settings.rs
+  - src-tauri/src/commands/llm.rs
+  - src-tauri/src/commands/audio.rs
+  - src-tauri/src/commands/transcribe.rs
+  - src-tauri/src/commands/pipeline.rs
+  - src-tauri/src/pipeline/orchestrator.rs
+  - src/main.tsx
+  - src/App.tsx
+  - src/components/index.ts
+  - src/components/ErrorBoundary/AppErrorBoundary.tsx (new)
+  - src/components/ErrorBoundary/index.ts (new)
+  - src/components/Toast/ToastViewport.tsx (new)
+  - src/components/Toast/index.ts (new)
+  - src/components/Skeletons/ContentSkeletons.tsx (new)
+  - src/components/Skeletons/index.ts (new)
+  - src/stores/toastStore.ts (new)
+  - src/stores/index.ts
+  - src/lib/types.ts
+  - src/components/Settings/SettingsPanel.tsx
+  - src/components/Notes/NotesExport.tsx
+  - src/components/Flashcards/AnkiExport.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/Pipeline/ProgressTracker.tsx
+  - src/pages/Notes.tsx
+  - src/pages/Quiz.tsx
+  - src/pages/Flashcards.tsx
+  - src/pages/MindMap.tsx
+  - src/pages/Research.tsx
+
 ## [Task 5.1] - 2026-02-21
 - Added: Lecture Library home dashboard (`/`) with search, sort, status filtering, lecture cards, contextual status/progress badges, and per-lecture actions (Delete, Re-process, Export All)
 - Added: Empty-state library view with illustration and CTA to upload the first lecture

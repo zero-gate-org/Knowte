@@ -1,6 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
+import {
+  regenerateMindmap,
+  regenerateNotes,
+  regenerateQuiz,
+  startPipeline,
+} from "../../lib/tauriApi";
 import type { LlmStreamEvent, PipelineStage, PipelineStageEvent } from "../../lib/types";
+import { useToastStore } from "../../stores";
 
 // ─── Stage configuration ─────────────────────────────────────────────────────
 
@@ -38,9 +45,15 @@ function SpinnerIcon() {
 function StageRow({
   stage,
   streamingPreview,
+  isMutating,
+  onRetry,
+  onSkip,
 }: {
   stage: PipelineStage;
   streamingPreview: string;
+  isMutating: boolean;
+  onRetry: () => void;
+  onSkip: () => void;
 }) {
   const statusColors: Record<string, string> = {
     pending: "border-slate-600 bg-slate-800/40",
@@ -115,7 +128,27 @@ function StageRow({
 
       {/* Error message */}
       {stage.status === "error" && stage.error && (
-        <p className="mt-1 text-xs text-red-400">{stage.error}</p>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-red-400">{stage.error}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isMutating}
+              className="rounded-md bg-red-900/50 px-2.5 py-1 text-xs font-medium text-red-100 transition-colors hover:bg-red-800/60 disabled:opacity-50"
+            >
+              {isMutating ? "Retrying..." : "Retry"}
+            </button>
+            <button
+              type="button"
+              onClick={onSkip}
+              disabled={isMutating}
+              className="rounded-md bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 disabled:opacity-50"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -135,12 +168,15 @@ export default function ProgressTracker({
   onPipelineComplete,
   className,
 }: ProgressTrackerProps) {
+  const pushToast = useToastStore((state) => state.pushToast);
   const [stages, setStages] = useState<PipelineStage[]>(
     PIPELINE_STAGES.map((s) => ({ ...s, status: "pending" as const })),
   );
   const [stagesComplete, setStagesComplete] = useState(0);
   const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
   const [isDone, setIsDone] = useState(false);
+  const [pipelineWarning, setPipelineWarning] = useState<string | null>(null);
+  const [stageActionName, setStageActionName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!lectureId) {
@@ -152,6 +188,8 @@ export default function ProgressTracker({
     setStagesComplete(0);
     setStreamingTokens({});
     setIsDone(false);
+    setPipelineWarning(null);
+    setStageActionName(null);
 
     const unlisteners: Array<() => void> = [];
 
@@ -160,6 +198,11 @@ export default function ProgressTracker({
       const unlistenStage = await listen<PipelineStageEvent>("pipeline-stage", (event) => {
         const payload = event.payload;
         if (payload.lecture_id !== lectureId) return;
+
+        if (payload.stage === "pipeline" && payload.status === "warning") {
+          setPipelineWarning(payload.error ?? "Results may be limited due to very short transcript.");
+          return;
+        }
 
         if (payload.stage === "pipeline" && payload.status === "complete") {
           setIsDone(true);
@@ -222,8 +265,93 @@ export default function ProgressTracker({
 
   const progressPercent = Math.round((stagesComplete / TOTAL_STAGES) * 100);
 
+  const updateStageStatus = (
+    stageName: string,
+    status: PipelineStage["status"],
+    preview?: string,
+    error?: string,
+  ) => {
+    setStages((prev) =>
+      prev.map((stage) =>
+        stage.name === stageName
+          ? {
+              ...stage,
+              status,
+              preview,
+              error,
+            }
+          : stage,
+      ),
+    );
+  };
+
+  const stageIndex = (stageName: string) =>
+    PIPELINE_STAGES.findIndex((stage) => stage.name === stageName);
+
+  const handleRetryStage = async (stageName: string) => {
+    if (!lectureId || stageActionName) return;
+
+    setStageActionName(stageName);
+    updateStageStatus(stageName, "running", undefined, undefined);
+
+    try {
+      if (stageName === "notes") {
+        const notes = await regenerateNotes(lectureId);
+        if (!notes) {
+          throw new Error("No notes data returned.");
+        }
+        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+      } else if (stageName === "quiz") {
+        const quiz = await regenerateQuiz(lectureId);
+        if (!quiz) {
+          throw new Error("No quiz data returned.");
+        }
+        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+      } else if (stageName === "mindmap") {
+        const mindmap = await regenerateMindmap(lectureId);
+        if (!mindmap) {
+          throw new Error("No mind map data returned.");
+        }
+        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+      } else {
+        await startPipeline(lectureId);
+        pushToast({
+          kind: "info",
+          message: `Retrying ${stageName} by restarting the remaining pipeline stages.`,
+        });
+      }
+
+      const index = stageIndex(stageName);
+      if (index >= 0) {
+        setStagesComplete((current) => Math.max(current, index + 1));
+      }
+      pushToast({ kind: "success", message: `Retried "${stageName}" stage.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateStageStatus(stageName, "error", undefined, message);
+      pushToast({ kind: "error", message: `Failed to retry "${stageName}": ${message}` });
+    } finally {
+      setStageActionName(null);
+    }
+  };
+
+  const handleSkipStage = (stageName: string) => {
+    updateStageStatus(stageName, "complete", "Skipped by user.", undefined);
+    const index = stageIndex(stageName);
+    if (index >= 0) {
+      setStagesComplete((current) => Math.max(current, index + 1));
+    }
+    pushToast({ kind: "warning", message: `Skipped "${stageName}" stage.` });
+  };
+
   return (
     <section className={`space-y-4 ${className ?? ""}`}>
+      {pipelineWarning && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {pipelineWarning}
+        </div>
+      )}
+
       {/* Overall progress bar */}
       <div className="flex items-center gap-3">
         <div className="flex-1 overflow-hidden rounded-full bg-slate-700 h-2">
@@ -244,6 +372,9 @@ export default function ProgressTracker({
             key={stage.name}
             stage={stage}
             streamingPreview={streamingTokens[stage.name] ?? ""}
+            isMutating={stageActionName === stage.name}
+            onRetry={() => void handleRetryStage(stage.name)}
+            onSkip={() => handleSkipStage(stage.name)}
           />
         ))}
       </div>
@@ -256,4 +387,3 @@ export default function ProgressTracker({
     </section>
   );
 }
-

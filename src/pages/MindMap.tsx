@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { MindMapSkeleton } from "../components/Skeletons";
 import { MindMapCanvas } from "../components/MindMap";
 import { getMindmap, regenerateMindmap } from "../lib/tauriApi";
 import type { MindMapData } from "../lib/types";
-import { useLectureStore } from "../stores/lectureStore";
+import { useLectureStore, useToastStore } from "../stores";
 
 // ─── Empty / error states ─────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ function NoLecture() {
 
 export default function MindMap() {
   const { currentLectureId } = useLectureStore();
+  const pushToast = useToastStore((state) => state.pushToast);
 
   const [mindmapData, setMindmapData] = useState<MindMapData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,13 +120,17 @@ export default function MindMap() {
       const json = await regenerateMindmap(currentLectureId);
       if (json) {
         setMindmapData(JSON.parse(json) as MindMapData);
+        pushToast({ kind: "success", message: "Mind map regenerated successfully." });
+      } else {
+        pushToast({ kind: "warning", message: "Mind map regeneration returned no data." });
       }
     } catch (err: unknown) {
       setError(String(err));
+      pushToast({ kind: "error", message: "Failed to regenerate mind map." });
     } finally {
       setIsGenerating(false);
     }
-  }, [currentLectureId]);
+  }, [currentLectureId, pushToast]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -175,10 +181,7 @@ export default function MindMap() {
       {/* Main content */}
       <div className="flex-1 min-h-0">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full gap-3 text-slate-400">
-            <span className="animate-spin w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full inline-block" />
-            Loading mind map…
-          </div>
+          <MindMapSkeleton />
         ) : mindmapData ? (
           <MindMapCanvas data={mindmapData} />
         ) : (

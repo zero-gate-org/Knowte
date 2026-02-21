@@ -10,6 +10,21 @@ import { useLectureStore } from "../stores";
 
 const PLAYBACK_RATE_DEFAULT = 1;
 
+function formatPlaybackError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("notsupportederror") || normalized.includes("not supported")) {
+    return "Unable to play this audio format. Re-transcribe the lecture to regenerate a WAV playback file.";
+  }
+
+  if (normalized.includes("notallowederror") || normalized.includes("gesture")) {
+    return "Playback was blocked. Click the play button again to start audio.";
+  }
+
+  return message && message !== "undefined" ? message : "Unable to start audio playback.";
+}
+
 export default function Transcript() {
   const [isEditing, setIsEditing] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -170,8 +185,9 @@ export default function Transcript() {
     }
 
     if (audio.paused) {
-      void audio.play().catch(() => {
-        setAudioError("Unable to start audio playback.");
+      setAudioError(null);
+      void audio.play().catch((error) => {
+        setAudioError(formatPlaybackError(error));
       });
       return;
     }

@@ -3,6 +3,13 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
+use tokio::time::{sleep, Duration};
+
+const DEFAULT_TIMEOUT_SECS: u64 = 300;
+const MIN_TIMEOUT_SECS: u64 = 30;
+const MAX_TIMEOUT_SECS: u64 = 1_800;
+const MAX_RETRIES: usize = 2;
+const RETRY_DELAY_SECS: u64 = 3;
 
 // ─── Error Types ─────────────────────────────────────────────────────────────
 
@@ -14,8 +21,8 @@ pub enum LlmError {
     #[error("Model '{0}' is not downloaded. Run `ollama pull {0}` to download it.")]
     ModelNotFound(String),
 
-    #[error("LLM request timed out after 5 minutes. The model may be too slow or the transcript too long.")]
-    Timeout,
+    #[error("LLM request timed out after {0} seconds. The model may be too slow or the transcript too long.")]
+    Timeout(u64),
 
     #[error("Failed to send request to Ollama: {0}")]
     RequestFailed(String),
@@ -57,16 +64,22 @@ struct OllamaStreamChunk {
 
 pub struct OllamaClient {
     base_url: String,
+    timeout_secs: u64,
     client: reqwest::Client,
 }
 
 impl OllamaClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: String, timeout_secs: u64) -> Self {
+        let timeout_secs = clamp_timeout_secs(timeout_secs);
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300)) // 5-minute timeout
+            .timeout(Duration::from_secs(timeout_secs))
             .build()
             .unwrap_or_default();
-        Self { base_url, client }
+        Self {
+            base_url,
+            timeout_secs,
+            client,
+        }
     }
 
     /// Returns `true` when the Ollama server is reachable.
@@ -81,11 +94,11 @@ impl OllamaClient {
             .unwrap_or(false)
     }
 
-    /// Stream a generation request to Ollama.
+    /// Stream a generation request to Ollama (single attempt).
     ///
     /// Emits `llm-stream` Tauri events as each token arrives, then returns
     /// the full concatenated response string.
-    pub async fn generate(
+    async fn generate_once(
         &self,
         app: &AppHandle,
         model: &str,
@@ -112,7 +125,7 @@ impl OllamaClient {
             .await
             .map_err(|e| {
                 if e.is_timeout() {
-                    LlmError::Timeout
+                    LlmError::Timeout(self.timeout_secs)
                 } else {
                     LlmError::RequestFailed(e.to_string())
                 }
@@ -143,7 +156,7 @@ impl OllamaClient {
         'outer: while let Some(chunk_result) = byte_stream.next().await {
             let bytes = chunk_result.map_err(|e| {
                 if e.is_timeout() {
-                    LlmError::Timeout
+                    LlmError::Timeout(self.timeout_secs)
                 } else {
                     LlmError::RequestFailed(e.to_string())
                 }
@@ -199,6 +212,53 @@ impl OllamaClient {
 
         Ok(accumulated)
     }
+
+    /// Stream a generation request with retry for transient failures.
+    ///
+    /// Retries up to `MAX_RETRIES` times with a 3-second delay. Permanent
+    /// errors (for example, model not found) fail immediately.
+    pub async fn generate(
+        &self,
+        app: &AppHandle,
+        model: &str,
+        prompt: &str,
+        lecture_id: &str,
+        stage: &str,
+    ) -> Result<String, LlmError> {
+        let mut last_error: Option<LlmError> = None;
+
+        for attempt in 0..=MAX_RETRIES {
+            match self
+                .generate_once(app, model, prompt, lecture_id, stage)
+                .await
+            {
+                Ok(output) => return Ok(output),
+                Err(error) => {
+                    // Do not retry errors that require user intervention.
+                    if matches!(error, LlmError::ModelNotFound(_)) {
+                        return Err(error);
+                    }
+
+                    last_error = Some(error);
+                    if attempt < MAX_RETRIES {
+                        sleep(Duration::from_secs(RETRY_DELAY_SECS)).await;
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or(LlmError::RequestFailed(
+            "Unknown generation failure.".to_string(),
+        )))
+    }
+}
+
+fn clamp_timeout_secs(raw_timeout: u64) -> u64 {
+    if raw_timeout == 0 {
+        return DEFAULT_TIMEOUT_SECS;
+    }
+
+    raw_timeout.clamp(MIN_TIMEOUT_SECS, MAX_TIMEOUT_SECS)
 }
 
 // ─── JSON Extraction Helper ───────────────────────────────────────────────────
@@ -272,7 +332,7 @@ pub async fn generate_llm_response(
         model.clone()
     };
 
-    let client = OllamaClient::new(ollama_url);
+    let client = OllamaClient::new(ollama_url, settings.llm_timeout_seconds);
 
     let raw = client
         .generate(&app, &effective_model, &prompt, &lecture_id, &stage)
@@ -316,7 +376,7 @@ pub async fn generate_llm_response(
 #[tauri::command]
 pub async fn check_llm_availability(app: AppHandle) -> Result<bool, String> {
     let settings = get_settings(app).map_err(LlmError::SettingsReadFailed)?;
-    let client = OllamaClient::new(settings.ollama_url);
+    let client = OllamaClient::new(settings.ollama_url, settings.llm_timeout_seconds);
     Ok(client.is_available().await)
 }
 

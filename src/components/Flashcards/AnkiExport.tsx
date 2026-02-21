@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { exportFlashcardsAnki, exportFlashcardsTsv } from "../../lib/tauriApi";
+import { useToastStore } from "../../stores";
 
 interface AnkiExportProps {
   lectureId: string;
@@ -7,6 +8,7 @@ interface AnkiExportProps {
 }
 
 export default function AnkiExport({ lectureId, cardCount }: AnkiExportProps) {
+  const pushToast = useToastStore((state) => state.pushToast);
   const [ankiState, setAnkiState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [tsvState, setTsvState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [ankiPath, setAnkiPath] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export default function AnkiExport({ lectureId, cardCount }: AnkiExportProps) {
       if (path) {
         setAnkiPath(path);
         setAnkiState("success");
+        pushToast({ kind: "success", message: "Anki package exported successfully." });
       } else {
         // User cancelled the dialog
         setAnkiState("idle");
@@ -28,6 +31,7 @@ export default function AnkiExport({ lectureId, cardCount }: AnkiExportProps) {
     } catch (e) {
       setError(String(e));
       setAnkiState("error");
+      pushToast({ kind: "error", message: "Failed to export Anki package." });
     }
   };
 
@@ -39,12 +43,14 @@ export default function AnkiExport({ lectureId, cardCount }: AnkiExportProps) {
       if (path) {
         setTsvPath(path);
         setTsvState("success");
+        pushToast({ kind: "success", message: "Flashcards text export completed." });
       } else {
         setTsvState("idle");
       }
     } catch (e) {
       setError(String(e));
       setTsvState("error");
+      pushToast({ kind: "error", message: "Failed to export flashcards text file." });
     }
   };
 

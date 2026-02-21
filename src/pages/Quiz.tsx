@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { QuizSkeleton } from "../components/Skeletons";
 import { QuizPlayer, QuizResults } from "../components/Quiz";
 import type { UserAnswers } from "../components/Quiz";
 import { getQuiz, regenerateQuiz, saveQuizAttempt } from "../lib/tauriApi";
 import type { Quiz } from "../lib/types";
-import { useLectureStore } from "../stores/lectureStore";
+import { useLectureStore, useToastStore } from "../stores";
 
 // ─── Empty States ─────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ function EmptyState({ reason }: { reason: "no-lecture" | "no-quiz" }) {
 
 export default function Quiz() {
   const { currentLectureId } = useLectureStore();
+  const pushToast = useToastStore((state) => state.pushToast);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,38 +43,40 @@ export default function Quiz() {
   const [completedAnswers, setCompletedAnswers] = useState<UserAnswers>({});
   const [completedScore, setCompletedScore] = useState(0);
 
-  // ── Load quiz from backend ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!currentLectureId) return;
-    let cancelled = false;
+  const loadQuiz = useCallback(async () => {
+    if (!currentLectureId) {
+      setQuiz(null);
+      return;
+    }
 
     setQuiz(null);
     setError(null);
     setShowResults(false);
     setIsLoading(true);
 
-    getQuiz(currentLectureId)
-      .then((raw) => {
-        if (cancelled) return;
-        if (raw) {
-          try {
-            setQuiz(JSON.parse(raw) as Quiz);
-          } catch {
-            setError("Failed to parse quiz data.");
-          }
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+    try {
+      const raw = await getQuiz(currentLectureId);
+      if (!raw) {
+        setQuiz(null);
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
+      try {
+        setQuiz(JSON.parse(raw) as Quiz);
+      } catch {
+        setError("Failed to parse quiz data.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
   }, [currentLectureId]);
+
+  // ── Load quiz from backend ────────────────────────────────────────────────
+  useEffect(() => {
+    void loadQuiz();
+  }, [loadQuiz]);
 
   // ── Regenerate quiz ───────────────────────────────────────────────────────
   const handleRegenerateQuiz = useCallback(async () => {
@@ -85,13 +89,17 @@ export default function Quiz() {
       const raw = await regenerateQuiz(currentLectureId);
       if (raw) {
         setQuiz(JSON.parse(raw) as Quiz);
+        pushToast({ kind: "success", message: "Quiz regenerated successfully." });
+      } else {
+        pushToast({ kind: "warning", message: "Quiz regeneration returned no questions." });
       }
     } catch (err) {
       setError(typeof err === "string" ? err : "Failed to regenerate quiz.");
+      pushToast({ kind: "error", message: "Failed to regenerate quiz." });
     } finally {
       setIsRegenerating(false);
     }
-  }, [currentLectureId, isRegenerating]);
+  }, [currentLectureId, isRegenerating, pushToast]);
 
   // ── On quiz completed ─────────────────────────────────────────────────────
   const handleQuizComplete = useCallback(
@@ -104,11 +112,15 @@ export default function Quiz() {
       if (currentLectureId) {
         const total = quiz?.questions.length ?? 0;
         saveQuizAttempt(currentLectureId, JSON.stringify(answers), score, total).catch(
-          (err) => console.error("Failed to save quiz attempt:", err),
+          () =>
+            pushToast({
+              kind: "warning",
+              message: "Quiz attempt completed, but saving history failed.",
+            }),
         );
       }
     },
-    [currentLectureId, quiz],
+    [currentLectureId, quiz, pushToast],
   );
 
   // ── Retake quiz ──────────────────────────────────────────────────────────
@@ -125,11 +137,9 @@ export default function Quiz() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading quiz…</span>
-        </div>
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold text-slate-100">Interactive Quiz</h1>
+        <QuizSkeleton />
       </div>
     );
   }
@@ -141,6 +151,13 @@ export default function Quiz() {
         <div className="bg-red-950/40 border border-red-700/50 rounded-lg p-4 text-red-300 text-sm">
           {error}
         </div>
+        <button
+          type="button"
+          onClick={() => void loadQuiz()}
+          className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
+        >
+          Retry
+        </button>
       </div>
     );
   }
