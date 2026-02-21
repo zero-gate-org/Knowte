@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LectureRecord {
@@ -31,6 +32,103 @@ pub struct PipelineStageRecord {
     pub error: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LectureSummaryRecord {
+    pub id: String,
+    pub title: String,
+    pub filename: String,
+    pub audio_path: String,
+    pub duration: f64,
+    pub status: String,
+    pub created_at: String,
+    pub summary: Option<String>,
+    pub stages_complete: i64,
+}
+
+fn fallback_title(filename: &str) -> String {
+    let stem = Path::new(filename)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    stem.unwrap_or(filename).to_string()
+}
+
+fn title_from_notes(notes_json: Option<&str>, filename: &str) -> String {
+    let parsed = notes_json
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("title")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    parsed.unwrap_or_else(|| fallback_title(filename))
+}
+
+fn to_fts_query(query: &str) -> String {
+    let mut terms = Vec::new();
+    for token in query.split_whitespace() {
+        let cleaned: String = token
+            .chars()
+            .filter(|character| character.is_alphanumeric() || *character == '_')
+            .collect();
+
+        if !cleaned.is_empty() {
+            terms.push(format!("{cleaned}*"));
+        }
+    }
+
+    terms.join(" AND ")
+}
+
+fn sync_search_document(connection: &Connection, lecture_id: &str) -> rusqlite::Result<()> {
+    connection.execute(
+        "DELETE FROM lecture_search_fts WHERE lecture_id = ?1",
+        params![lecture_id],
+    )?;
+
+    connection.execute(
+        r#"
+        INSERT INTO lecture_search_fts (lecture_id, transcript_text, notes_text)
+        SELECT
+            l.id,
+            COALESCE(t.full_text, ''),
+            COALESCE(n.notes_json, '')
+        FROM lectures l
+        LEFT JOIN transcripts t ON t.lecture_id = l.id
+        LEFT JOIN notes n ON n.lecture_id = l.id
+        WHERE l.id = ?1
+        "#,
+        params![lecture_id],
+    )?;
+
+    Ok(())
+}
+
+pub fn rebuild_lecture_search_index(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute("DELETE FROM lecture_search_fts", [])?;
+    connection.execute(
+        r#"
+        INSERT INTO lecture_search_fts (lecture_id, transcript_text, notes_text)
+        SELECT
+            l.id,
+            COALESCE(t.full_text, ''),
+            COALESCE(n.notes_json, '')
+        FROM lectures l
+        LEFT JOIN transcripts t ON t.lecture_id = l.id
+        LEFT JOIN notes n ON n.lecture_id = l.id
+        "#,
+        [],
+    )?;
+
+    Ok(())
 }
 
 pub fn upsert_lecture(connection: &Connection, lecture: &LectureRecord) -> rusqlite::Result<()> {
@@ -124,6 +222,127 @@ pub fn get_lecture_by_id(
     }
 }
 
+pub fn list_lectures(connection: &Connection) -> rusqlite::Result<Vec<LectureSummaryRecord>> {
+    let mut statement = connection.prepare(
+        r#"
+        SELECT
+            l.id,
+            l.filename,
+            l.audio_path,
+            l.duration,
+            l.status,
+            l.created_at,
+            l.summary,
+            n.notes_json,
+            COALESCE((
+                SELECT COUNT(*)
+                FROM pipeline_stages ps
+                WHERE ps.lecture_id = l.id
+                  AND ps.status = 'complete'
+            ), 0) AS stages_complete
+        FROM lectures l
+        LEFT JOIN notes n ON n.lecture_id = l.id
+        ORDER BY datetime(l.created_at) DESC
+        "#,
+    )?;
+
+    let rows = statement.query_map([], |row| {
+        let filename: String = row.get(1)?;
+        let notes_json: Option<String> = row.get(7)?;
+
+        Ok(LectureSummaryRecord {
+            id: row.get(0)?,
+            title: title_from_notes(notes_json.as_deref(), &filename),
+            filename,
+            audio_path: row.get(2)?,
+            duration: row.get(3)?,
+            status: row.get(4)?,
+            created_at: row.get(5)?,
+            summary: row.get(6)?,
+            stages_complete: row.get(8)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+pub fn search_lectures(
+    connection: &Connection,
+    query: &str,
+) -> rusqlite::Result<Vec<LectureSummaryRecord>> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return list_lectures(connection);
+    }
+
+    rebuild_lecture_search_index(connection)?;
+    let fts_query = to_fts_query(trimmed);
+
+    let mut statement = connection.prepare(
+        r#"
+        SELECT DISTINCT
+            l.id,
+            l.filename,
+            l.audio_path,
+            l.duration,
+            l.status,
+            l.created_at,
+            l.summary,
+            n.notes_json,
+            COALESCE((
+                SELECT COUNT(*)
+                FROM pipeline_stages ps
+                WHERE ps.lecture_id = l.id
+                  AND ps.status = 'complete'
+            ), 0) AS stages_complete
+        FROM lectures l
+        LEFT JOIN notes n ON n.lecture_id = l.id
+        LEFT JOIN lecture_search_fts fts ON fts.lecture_id = l.id
+        WHERE
+            lower(l.filename) LIKE '%' || lower(?1) || '%'
+            OR lower(COALESCE(fts.transcript_text, '')) LIKE '%' || lower(?1) || '%'
+            OR lower(COALESCE(fts.notes_text, '')) LIKE '%' || lower(?1) || '%'
+            OR (
+                ?2 != ''
+                AND l.id IN (
+                    SELECT lecture_id
+                    FROM lecture_search_fts
+                    WHERE lecture_search_fts MATCH ?2
+                )
+            )
+        ORDER BY datetime(l.created_at) DESC
+        "#,
+    )?;
+
+    let rows = statement.query_map(params![trimmed, fts_query], |row| {
+        let filename: String = row.get(1)?;
+        let notes_json: Option<String> = row.get(7)?;
+
+        Ok(LectureSummaryRecord {
+            id: row.get(0)?,
+            title: title_from_notes(notes_json.as_deref(), &filename),
+            filename,
+            audio_path: row.get(2)?,
+            duration: row.get(3)?,
+            status: row.get(4)?,
+            created_at: row.get(5)?,
+            summary: row.get(6)?,
+            stages_complete: row.get(8)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+pub fn delete_lecture(connection: &Connection, lecture_id: &str) -> rusqlite::Result<()> {
+    connection.execute("DELETE FROM lectures WHERE id = ?1", params![lecture_id])?;
+    connection.execute(
+        "DELETE FROM lecture_search_fts WHERE lecture_id = ?1",
+        params![lecture_id],
+    )?;
+    Ok(())
+}
+
 pub fn upsert_transcript(
     connection: &Connection,
     transcript: &TranscriptRecord,
@@ -148,6 +367,8 @@ pub fn upsert_transcript(
             transcript.created_at
         ],
     )?;
+
+    sync_search_document(connection, &transcript.lecture_id)?;
 
     Ok(())
 }
@@ -311,13 +532,12 @@ pub fn upsert_notes(
         "#,
         params![id, lecture_id, notes_json, now],
     )?;
+
+    sync_search_document(connection, lecture_id)?;
     Ok(())
 }
 
-pub fn get_notes(
-    connection: &Connection,
-    lecture_id: &str,
-) -> rusqlite::Result<Option<String>> {
+pub fn get_notes(connection: &Connection, lecture_id: &str) -> rusqlite::Result<Option<String>> {
     let result = connection.query_row(
         "SELECT notes_json FROM notes WHERE lecture_id = ?1",
         params![lecture_id],
@@ -352,10 +572,7 @@ pub fn upsert_quiz(
     Ok(())
 }
 
-pub fn get_quiz(
-    connection: &Connection,
-    lecture_id: &str,
-) -> rusqlite::Result<Option<String>> {
+pub fn get_quiz(connection: &Connection, lecture_id: &str) -> rusqlite::Result<Option<String>> {
     let result = connection.query_row(
         "SELECT quiz_json FROM quizzes WHERE lecture_id = ?1",
         params![lecture_id],
@@ -428,10 +645,7 @@ pub fn upsert_mindmap(
     Ok(())
 }
 
-pub fn get_mindmap(
-    connection: &Connection,
-    lecture_id: &str,
-) -> rusqlite::Result<Option<String>> {
+pub fn get_mindmap(connection: &Connection, lecture_id: &str) -> rusqlite::Result<Option<String>> {
     let result = connection.query_row(
         "SELECT mindmap_json FROM mindmaps WHERE lecture_id = ?1",
         params![lecture_id],
@@ -504,10 +718,7 @@ pub fn upsert_papers(
     Ok(())
 }
 
-pub fn get_papers(
-    connection: &Connection,
-    lecture_id: &str,
-) -> rusqlite::Result<Option<String>> {
+pub fn get_papers(connection: &Connection, lecture_id: &str) -> rusqlite::Result<Option<String>> {
     let result = connection.query_row(
         "SELECT papers_json FROM papers WHERE lecture_id = ?1",
         params![lecture_id],
@@ -541,4 +752,3 @@ pub fn insert_quiz_attempt(
     )?;
     Ok(id)
 }
-

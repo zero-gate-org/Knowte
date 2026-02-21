@@ -210,9 +210,7 @@ pub async fn search_related_papers(
     };
 
     if keywords.is_empty() {
-        return Err(
-            "No keywords found for this lecture. Run the pipeline first.".to_string(),
-        );
+        return Err("No keywords found for this lecture. Run the pipeline first.".to_string());
     }
 
     let papers = search_papers(keywords, 10).await?;
@@ -222,8 +220,7 @@ pub async fn search_related_papers(
         let conn = db.connect().map_err(|e| e.to_string())?;
         let papers_json = serde_json::to_string(&papers)
             .map_err(|e| format!("Failed to serialise papers: {}", e))?;
-        queries::upsert_papers(&conn, &lecture_id, &papers_json)
-            .map_err(|e| e.to_string())?;
+        queries::upsert_papers(&conn, &lecture_id, &papers_json).map_err(|e| e.to_string())?;
     }
 
     Ok(papers)

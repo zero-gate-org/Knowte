@@ -5,7 +5,7 @@ import {
   TranscriptEditor,
   TranscriptViewer,
 } from "../components";
-import { getLectureAudioUrl } from "../lib/tauriApi";
+import { getLectureAudioUrl, getLectureTranscript } from "../lib/tauriApi";
 import { useLectureStore } from "../stores";
 
 const PLAYBACK_RATE_DEFAULT = 1;
@@ -20,11 +20,55 @@ export default function Transcript() {
   const [playbackRate, setPlaybackRate] = useState(PLAYBACK_RATE_DEFAULT);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const { lectures, currentLectureId } = useLectureStore();
+  const { lectures, currentLectureId, updateLecture } = useLectureStore();
   const lecture = useMemo(
     () => lectures.find((item) => item.id === currentLectureId) ?? null,
     [lectures, currentLectureId],
   );
+
+  useEffect(() => {
+    if (!lecture?.id) {
+      return;
+    }
+    if (
+      lecture.transcriptId &&
+      lecture.transcriptSegments &&
+      lecture.transcriptSegments.length > 0
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void (async () => {
+      try {
+        const transcript = await getLectureTranscript(lecture.id);
+        if (!transcript || isCancelled) {
+          return;
+        }
+
+        updateLecture(lecture.id, {
+          transcriptId: transcript.transcript_id,
+          transcript: transcript.full_text,
+          transcriptSegments: transcript.segments,
+          originalTranscriptSegments:
+            lecture.originalTranscriptSegments ?? transcript.segments.map((segment) => ({ ...segment })),
+        });
+      } catch {
+        // If transcript fetch fails we keep existing UI fallback messaging.
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    lecture?.id,
+    lecture?.originalTranscriptSegments,
+    lecture?.transcriptId,
+    lecture?.transcriptSegments,
+    updateLecture,
+  ]);
 
   useEffect(() => {
     setCurrentTime(0);

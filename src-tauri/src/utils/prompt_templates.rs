@@ -157,7 +157,10 @@ mod tests {
 
     #[test]
     fn test_level_description_known() {
-        assert_eq!(get_level_description("high_school"), "high school student (ages 15-18)");
+        assert_eq!(
+            get_level_description("high_school"),
+            "high school student (ages 15-18)"
+        );
         assert_eq!(get_level_description("phd_researcher"), "PhD researcher");
     }
 

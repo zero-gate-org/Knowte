@@ -190,14 +190,11 @@ pub fn export_as_apkg(
 
     // ── Create temporary SQLite database ──────────────────────────────────────
 
-    let tmp_db = std::env::temp_dir().join(format!(
-        "cognote_{}.anki2",
-        uuid::Uuid::new_v4()
-    ));
+    let tmp_db = std::env::temp_dir().join(format!("cognote_{}.anki2", uuid::Uuid::new_v4()));
 
     {
-        let conn = Connection::open(&tmp_db)
-            .map_err(|e| format!("Failed to create temp SQLite: {e}"))?;
+        let conn =
+            Connection::open(&tmp_db).map_err(|e| format!("Failed to create temp SQLite: {e}"))?;
 
         create_anki_schema(&conn).map_err(|e| format!("Schema error: {e}"))?;
 
@@ -248,8 +245,7 @@ pub fn export_as_apkg(
 
     // ── Read temp DB bytes ────────────────────────────────────────────────────
 
-    let db_bytes =
-        std::fs::read(&tmp_db).map_err(|e| format!("Failed to read temp DB: {e}"))?;
+    let db_bytes = std::fs::read(&tmp_db).map_err(|e| format!("Failed to read temp DB: {e}"))?;
     let _ = std::fs::remove_file(&tmp_db);
 
     // ── Package as ZIP (.apkg) ────────────────────────────────────────────────
@@ -258,8 +254,8 @@ pub fn export_as_apkg(
         .map_err(|e| format!("Failed to create output file: {e}"))?;
     let mut zip = zip::ZipWriter::new(out_file);
 
-    let opts = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let opts =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     zip.start_file("media", opts)
         .map_err(|e| format!("ZIP start_file error: {e}"))?;
@@ -271,8 +267,7 @@ pub fn export_as_apkg(
     zip.write_all(&db_bytes)
         .map_err(|e| format!("ZIP write error: {e}"))?;
 
-    zip.finish()
-        .map_err(|e| format!("ZIP finish error: {e}"))?;
+    zip.finish().map_err(|e| format!("ZIP finish error: {e}"))?;
 
     Ok(())
 }
@@ -282,7 +277,7 @@ pub fn export_as_apkg(
 /// Export flashcards as a tab-separated .txt file for Anki's "Import" feature.
 ///
 /// Format:
-/// ```
+/// ```text
 /// #separator:tab
 /// #html:false
 /// #notetype:Basic
@@ -316,6 +311,5 @@ pub fn export_as_tsv(
         content.push_str(&format!("{front}\t{back}\t{tags}\n"));
     }
 
-    std::fs::write(output_path, content.as_bytes())
-        .map_err(|e| format!("Failed to write TSV: {e}"))
+    std::fs::write(output_path, content.as_bytes()).map_err(|e| format!("Failed to write TSV: {e}"))
 }

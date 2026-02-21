@@ -298,13 +298,7 @@ pub async fn generate_llm_response(
     );
 
     let retry_raw = client
-        .generate(
-            &app,
-            &effective_model,
-            &retry_prompt,
-            &lecture_id,
-            &stage,
-        )
+        .generate(&app, &effective_model, &retry_prompt, &lecture_id, &stage)
         .await
         .map_err(|e: LlmError| e.to_string())?;
 

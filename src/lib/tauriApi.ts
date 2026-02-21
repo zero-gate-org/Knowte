@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AudioFileMetadata,
+  LectureSummary,
   OllamaStatus,
   Paper,
   PipelineStageRecord,
@@ -100,6 +101,33 @@ export async function updateTranscriptSegment(
 
 export async function getLectureAudioUrl(lectureId: string): Promise<string> {
   return invoke<string>("get_lecture_audio_url", { lectureId });
+}
+
+export async function getLectureTranscript(
+  lectureId: string,
+): Promise<TranscriptionResult | null> {
+  return invoke<TranscriptionResult | null>("get_lecture_transcript", { lectureId });
+}
+
+// ─── Library Commands ─────────────────────────────────────────────────────────
+
+export async function listLectures(): Promise<LectureSummary[]> {
+  return invoke<LectureSummary[]>("list_lectures");
+}
+
+export async function searchLectures(query: string): Promise<LectureSummary[]> {
+  return invoke<LectureSummary[]>("search_lectures", { query });
+}
+
+export async function deleteLecture(lectureId: string): Promise<void> {
+  return invoke("delete_lecture", { lectureId });
+}
+
+export async function exportAllLectureData(
+  lectureId: string,
+  outputDir: string,
+): Promise<string> {
+  return invoke<string>("export_all_lecture_data", { lectureId, outputDir });
 }
 
 // ─── Pipeline Commands ────────────────────────────────────────────────────────

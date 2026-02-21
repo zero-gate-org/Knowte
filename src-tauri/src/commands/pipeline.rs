@@ -179,10 +179,9 @@ pub async fn regenerate_notes(
 
     // ── Load transcript ──────────────────────────────────────────────────────
     let conn = db.connect().map_err(|e| e.to_string())?;
-    let transcript_rec =
-        crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    let transcript_rec = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
 
     let summary = crate::db::queries::get_lecture_summary(&conn, &lecture_id)
         .map_err(|e| e.to_string())?
@@ -191,8 +190,8 @@ pub async fn regenerate_notes(
     drop(conn);
 
     // ── Load settings ────────────────────────────────────────────────────────
-    let settings = crate::commands::settings::get_settings(app.clone())
-        .map_err(|e| e.to_string())?;
+    let settings =
+        crate::commands::settings::get_settings(app.clone()).map_err(|e| e.to_string())?;
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
@@ -242,8 +241,7 @@ pub async fn regenerate_notes(
 
     // ── Persist ──────────────────────────────────────────────────────────────
     let conn = db.connect().map_err(|e| e.to_string())?;
-    crate::db::queries::upsert_notes(&conn, &lecture_id, &json)
-        .map_err(|e| e.to_string())?;
+    crate::db::queries::upsert_notes(&conn, &lecture_id, &json).map_err(|e| e.to_string())?;
 
     Ok(Some(json))
 }
@@ -255,10 +253,7 @@ pub async fn regenerate_notes(
 ///
 /// Returns the chosen file path, or `None` if the user cancelled the dialog.
 #[tauri::command]
-pub fn export_notes_markdown(
-    app: AppHandle,
-    lecture_id: String,
-) -> Result<Option<String>, String> {
+pub fn export_notes_markdown(app: AppHandle, lecture_id: String) -> Result<Option<String>, String> {
     let db = app
         .try_state::<AppDatabase>()
         .ok_or_else(|| "Database not initialised".to_string())?;
@@ -269,8 +264,8 @@ pub fn export_notes_markdown(
         .ok_or_else(|| "No notes found for this lecture.".to_string())?;
     drop(conn);
 
-    let notes: StructuredNotesData = serde_json::from_str(&notes_json)
-        .map_err(|e| format!("Failed to parse notes: {e}"))?;
+    let notes: StructuredNotesData =
+        serde_json::from_str(&notes_json).map_err(|e| format!("Failed to parse notes: {e}"))?;
 
     let markdown = notes_to_markdown(&notes);
 
@@ -285,8 +280,7 @@ pub fn export_notes_markdown(
         return Ok(None); // User cancelled
     };
 
-    std::fs::write(&path, markdown.as_bytes())
-        .map_err(|e| format!("Failed to write file: {e}"))?;
+    std::fs::write(&path, markdown.as_bytes()).map_err(|e| format!("Failed to write file: {e}"))?;
 
     Ok(Some(path.to_string_lossy().to_string()))
 }
@@ -296,10 +290,7 @@ pub fn export_notes_markdown(
 /// Re-run the quiz generation stage for a lecture using the current LLM
 /// settings.  Returns the new quiz JSON (or an error string).
 #[tauri::command]
-pub async fn regenerate_quiz(
-    app: AppHandle,
-    lecture_id: String,
-) -> Result<Option<String>, String> {
+pub async fn regenerate_quiz(app: AppHandle, lecture_id: String) -> Result<Option<String>, String> {
     use crate::commands::llm::{parse_json_from_response, OllamaClient};
     use crate::utils::prompt_templates;
 
@@ -309,15 +300,14 @@ pub async fn regenerate_quiz(
 
     // ── Load transcript ──────────────────────────────────────────────────────
     let conn = db.connect().map_err(|e| e.to_string())?;
-    let transcript_rec =
-        crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    let transcript_rec = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
     drop(conn);
 
     // ── Load settings ────────────────────────────────────────────────────────
-    let settings = crate::commands::settings::get_settings(app.clone())
-        .map_err(|e| e.to_string())?;
+    let settings =
+        crate::commands::settings::get_settings(app.clone()).map_err(|e| e.to_string())?;
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
@@ -363,8 +353,7 @@ pub async fn regenerate_quiz(
 
     // ── Persist ──────────────────────────────────────────────────────────────
     let conn = db.connect().map_err(|e| e.to_string())?;
-    crate::db::queries::upsert_quiz(&conn, &lecture_id, &json)
-        .map_err(|e| e.to_string())?;
+    crate::db::queries::upsert_quiz(&conn, &lecture_id, &json).map_err(|e| e.to_string())?;
 
     Ok(Some(json))
 }
@@ -386,14 +375,13 @@ pub async fn regenerate_mindmap(
         .ok_or_else(|| "Database not initialised".to_string())?;
 
     let conn = db.connect().map_err(|e| e.to_string())?;
-    let transcript_rec =
-        crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    let transcript_rec = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
     drop(conn);
 
-    let settings = crate::commands::settings::get_settings(app.clone())
-        .map_err(|e| e.to_string())?;
+    let settings =
+        crate::commands::settings::get_settings(app.clone()).map_err(|e| e.to_string())?;
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
@@ -435,8 +423,7 @@ pub async fn regenerate_mindmap(
     };
 
     let conn = db.connect().map_err(|e| e.to_string())?;
-    crate::db::queries::upsert_mindmap(&conn, &lecture_id, &json)
-        .map_err(|e| e.to_string())?;
+    crate::db::queries::upsert_mindmap(&conn, &lecture_id, &json).map_err(|e| e.to_string())?;
 
     Ok(Some(json))
 }
@@ -458,8 +445,14 @@ pub async fn save_quiz_attempt(
         .ok_or_else(|| "Database not initialised".to_string())?;
 
     let conn = db.connect().map_err(|e| e.to_string())?;
-    crate::db::queries::insert_quiz_attempt(&conn, &lecture_id, &answers_json, score, total_questions)
-        .map_err(|e| e.to_string())
+    crate::db::queries::insert_quiz_attempt(
+        &conn,
+        &lecture_id,
+        &answers_json,
+        score,
+        total_questions,
+    )
+    .map_err(|e| e.to_string())
 }
 
 // ─── Flashcard Export ─────────────────────────────────────────────────────────
@@ -483,8 +476,8 @@ pub fn export_flashcards_anki(
         .ok_or_else(|| "No flashcards found for this lecture.".to_string())?;
 
     // Also look up lecture filename for the deck name
-    let lecture = crate::db::queries::get_lecture_by_id(&conn, &lecture_id)
-        .map_err(|e| e.to_string())?;
+    let lecture =
+        crate::db::queries::get_lecture_by_id(&conn, &lecture_id).map_err(|e| e.to_string())?;
     drop(conn);
 
     let deck_name = match &lecture {
@@ -519,10 +512,7 @@ pub fn export_flashcards_anki(
 /// Read stored flashcards for a lecture, open a native save-file dialog,
 /// and write a tab-separated .txt file for Anki import.  Returns path or null.
 #[tauri::command]
-pub fn export_flashcards_tsv(
-    app: AppHandle,
-    lecture_id: String,
-) -> Result<Option<String>, String> {
+pub fn export_flashcards_tsv(app: AppHandle, lecture_id: String) -> Result<Option<String>, String> {
     use crate::utils::anki_export;
 
     let db = app
@@ -534,8 +524,8 @@ pub fn export_flashcards_tsv(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "No flashcards found for this lecture.".to_string())?;
 
-    let lecture = crate::db::queries::get_lecture_by_id(&conn, &lecture_id)
-        .map_err(|e| e.to_string())?;
+    let lecture =
+        crate::db::queries::get_lecture_by_id(&conn, &lecture_id).map_err(|e| e.to_string())?;
     drop(conn);
 
     let deck_name = match &lecture {

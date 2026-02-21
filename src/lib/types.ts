@@ -183,8 +183,21 @@ export type LectureStatus =
   | "complete"
   | "error";
 
+export interface LectureSummary {
+  id: string;
+  title: string;
+  filename: string;
+  duration: number;
+  status: LectureStatus;
+  created_at: string;
+  audio_path: string;
+  summary?: string;
+  stages_complete: number;
+}
+
 export interface Lecture {
   id: string;
+  title?: string;
   filename: string;
   audioPath: string;
   duration: number;
@@ -200,6 +213,7 @@ export interface Lecture {
   mindmap?: MindMapData;
   flashcards?: Flashcard[];
   createdAt: string;
+  stagesComplete?: number;
   error?: string;
 }
 

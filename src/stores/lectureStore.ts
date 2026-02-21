@@ -9,7 +9,9 @@ interface LectureState {
   isProcessingLecture: boolean;
   error: string | null;
 
+  setLectures: (lectures: Lecture[]) => void;
   addLecture: (lecture: Lecture) => void;
+  removeLecture: (lectureId: string) => void;
   setCurrentLecture: (lectureId: string | null) => void;
   updateLecture: (lectureId: string, updates: Partial<Lecture>) => void;
   setUploading: (isUploading: boolean) => void;
@@ -26,11 +28,29 @@ export const useLectureStore = create<LectureState>((set) => ({
   isProcessingLecture: false,
   error: null,
 
+  setLectures: (lectures) =>
+    set((state) => ({
+      lectures: lectures.map((lecture) => {
+        const existing = state.lectures.find((item) => item.id === lecture.id);
+        return existing ? { ...existing, ...lecture } : lecture;
+      }),
+      currentLectureId:
+        state.currentLectureId && lectures.some((lecture) => lecture.id === state.currentLectureId)
+          ? state.currentLectureId
+          : null,
+    })),
+
   addLecture: (lecture) =>
     set((state) => ({
       lectures: [lecture, ...state.lectures.filter((item) => item.id !== lecture.id)],
       currentLectureId: lecture.id,
       error: null,
+    })),
+
+  removeLecture: (lectureId) =>
+    set((state) => ({
+      lectures: state.lectures.filter((lecture) => lecture.id !== lectureId),
+      currentLectureId: state.currentLectureId === lectureId ? null : state.currentLectureId,
     })),
 
   setCurrentLecture: (lectureId) =>

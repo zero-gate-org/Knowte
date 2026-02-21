@@ -2,6 +2,45 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 5.1] - 2026-02-21
+- Added: Lecture Library home dashboard (`/`) with search, sort, status filtering, lecture cards, contextual status/progress badges, and per-lecture actions (Delete, Re-process, Export All)
+- Added: Empty-state library view with illustration and CTA to upload the first lecture
+- Added: New Rust command module `src-tauri/src/commands/library.rs` with `list_lectures`, `search_lectures`, `delete_lecture`, and `export_all_lecture_data`
+- Added: SQLite FTS5 virtual table (`lecture_search_fts`) and DB query support for full-text lecture search across transcript and notes content
+- Added: URL-driven lecture routing (`/lecture/:id/...`) and lecture-context sidebar mode with Back-to-Library link and per-lecture navigation
+- Added: Frontend IPC wrappers/types for lecture library commands and lecture summary payloads
+- Added: Transcript hydration command path (`get_lecture_transcript`) so persisted lectures can load transcript data after app restart
+- Changed: Upload and pipeline navigation flows to lecture-scoped routes (`/lecture/:id/pipeline`, `/lecture/:id/notes`, etc.)
+- Changed: Lecture store now supports bulk lecture hydration/merge and lecture removal helpers for library management
+- Files modified:
+  - src/App.tsx
+  - src/components/Sidebar.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/index.ts
+  - src/components/Library/EmptyState.tsx (new)
+  - src/components/Library/LectureLibrary.tsx (new)
+  - src/components/Library/index.ts (new)
+  - src/pages/Library.tsx (new)
+  - src/pages/Pipeline.tsx
+  - src/pages/Transcript.tsx
+  - src/pages/index.ts
+  - src/stores/lectureStore.ts
+  - src/lib/tauriApi.ts
+  - src/lib/types.ts
+  - src-tauri/src/commands/library.rs (new)
+  - src-tauri/src/commands/mod.rs
+  - src-tauri/src/commands/transcribe.rs
+  - src-tauri/src/db/queries.rs
+  - src-tauri/src/db/schema.rs
+  - src-tauri/src/lib.rs
+  - src-tauri/src/commands/llm.rs
+  - src-tauri/src/commands/pipeline.rs
+  - src-tauri/src/commands/research.rs
+  - src-tauri/src/models/mod.rs
+  - src-tauri/src/pipeline/orchestrator.rs
+  - src-tauri/src/utils/anki_export.rs
+  - src-tauri/src/utils/prompt_templates.rs
+
 ## [Task 4.4] - 2026-02-21
 - Added: `src/components/Flashcards/FlashcardViewer.tsx` — card-flip animation using CSS 3D `rotateY` transform; browse mode with Previous/Next buttons and keyboard arrow navigation; space/enter to flip; shuffle button (Fisher-Yates); study mode with three-pile sorting (Know it / Almost / No clue), disabled until card is flipped; end-of-round stats screen with option to review weak cards or restart; tags rendered as pills on back face
 - Added: `src/components/Flashcards/AnkiExport.tsx` — dual export UI: Anki `.apkg` package button and tab-separated `.txt` button; native save-file dialog via Tauri; per-format loading/success/error states; on-screen import instructions after save

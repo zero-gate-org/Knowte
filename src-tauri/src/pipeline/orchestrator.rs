@@ -264,13 +264,31 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
             for (i, chunk) in chunks.iter().enumerate() {
                 let sub_stage = format!("summary_chunk_{}", i + 1);
                 let prompt = prompt_templates::summarize_prompt(chunk, &level);
-                let s = run_stage(&client, &app, &model, &prompt, &lecture_id, &sub_stage, false).await?;
+                let s = run_stage(
+                    &client,
+                    &app,
+                    &model,
+                    &prompt,
+                    &lecture_id,
+                    &sub_stage,
+                    false,
+                )
+                .await?;
                 chunk_summaries.push(s);
             }
             // Combine chunk summaries
             let combined = chunk_summaries.join("\n\n---\n\n");
             let final_prompt = prompt_templates::summarize_prompt(&combined, &level);
-            run_stage(&client, &app, &model, &final_prompt, &lecture_id, stage, false).await
+            run_stage(
+                &client,
+                &app,
+                &model,
+                &final_prompt,
+                &lecture_id,
+                stage,
+                false,
+            )
+            .await
         } else {
             let prompt = prompt_templates::summarize_prompt(&transcript_text, &level);
             run_stage(&client, &app, &model, &prompt, &lecture_id, stage, false).await
@@ -315,7 +333,17 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
     mark_stage_starting(&db, &lecture_id, stage);
 
     let notes_prompt = prompt_templates::structured_notes_prompt(&context_text, &level);
-    match run_stage(&client, &app, &model, &notes_prompt, &lecture_id, stage, true).await {
+    match run_stage(
+        &client,
+        &app,
+        &model,
+        &notes_prompt,
+        &lecture_id,
+        stage,
+        true,
+    )
+    .await
+    {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);
@@ -338,7 +366,17 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
     mark_stage_starting(&db, &lecture_id, stage);
 
     let quiz_prompt = prompt_templates::quiz_prompt(&context_text, &level);
-    match run_stage(&client, &app, &model, &quiz_prompt, &lecture_id, stage, true).await {
+    match run_stage(
+        &client,
+        &app,
+        &model,
+        &quiz_prompt,
+        &lecture_id,
+        stage,
+        true,
+    )
+    .await
+    {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);
@@ -361,7 +399,17 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
     mark_stage_starting(&db, &lecture_id, stage);
 
     let flashcards_prompt = prompt_templates::flashcards_prompt(&context_text, &level);
-    match run_stage(&client, &app, &model, &flashcards_prompt, &lecture_id, stage, true).await {
+    match run_stage(
+        &client,
+        &app,
+        &model,
+        &flashcards_prompt,
+        &lecture_id,
+        stage,
+        true,
+    )
+    .await
+    {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);
@@ -384,7 +432,17 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
     mark_stage_starting(&db, &lecture_id, stage);
 
     let mindmap_prompt = prompt_templates::mindmap_prompt(&context_text, &level);
-    match run_stage(&client, &app, &model, &mindmap_prompt, &lecture_id, stage, true).await {
+    match run_stage(
+        &client,
+        &app,
+        &model,
+        &mindmap_prompt,
+        &lecture_id,
+        stage,
+        true,
+    )
+    .await
+    {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);
@@ -413,7 +471,17 @@ pub async fn run_full_pipeline(lecture_id: String, app: AppHandle) {
         &summary_text
     };
     let keywords_prompt = prompt_templates::extract_keywords_prompt(keywords_input);
-    match run_stage(&client, &app, &model, &keywords_prompt, &lecture_id, stage, true).await {
+    match run_stage(
+        &client,
+        &app,
+        &model,
+        &keywords_prompt,
+        &lecture_id,
+        stage,
+        true,
+    )
+    .await
+    {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);

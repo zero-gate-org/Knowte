@@ -78,4 +78,3 @@ pub struct MindMapData {
 pub struct KeywordsOutput {
     pub keywords: Vec<String>,
 }
-

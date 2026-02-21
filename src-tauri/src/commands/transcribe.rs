@@ -1,7 +1,7 @@
 use crate::commands::settings::get_settings;
 use crate::db::queries::{
-    get_lecture_by_id, get_transcript_by_id, update_lecture_status, update_transcript_content,
-    upsert_transcript, TranscriptRecord,
+    get_lecture_by_id, get_transcript_by_id, get_transcript_by_lecture_id, update_lecture_status,
+    update_transcript_content, upsert_transcript, TranscriptRecord,
 };
 use crate::db::AppDatabase;
 use chrono::Utc;
@@ -190,6 +190,14 @@ pub fn get_lecture_audio_url(
     get_lecture_audio_url_impl(&app, database.inner(), lecture_id).map_err(Into::into)
 }
 
+#[tauri::command]
+pub fn get_lecture_transcript(
+    database: State<'_, AppDatabase>,
+    lecture_id: String,
+) -> Result<Option<TranscriptionResult>, String> {
+    get_lecture_transcript_impl(database.inner(), lecture_id).map_err(Into::into)
+}
+
 fn update_transcript_segment_impl(
     database: &AppDatabase,
     transcript_id: String,
@@ -253,6 +261,32 @@ fn get_lecture_audio_url_impl(
     let file_url =
         Url::from_file_path(&canonical_path).map_err(|_| TranscribeError::LectureAudioUrlFailed)?;
     Ok(format!("asset://localhost{}", file_url.path()))
+}
+
+fn get_lecture_transcript_impl(
+    database: &AppDatabase,
+    lecture_id: String,
+) -> Result<Option<TranscriptionResult>, TranscribeError> {
+    let connection = database
+        .connect()
+        .map_err(|_| TranscribeError::LectureDataUnavailable)?;
+    let transcript = get_transcript_by_lecture_id(&connection, &lecture_id)
+        .map_err(|_| TranscribeError::LectureDataUnavailable)?;
+
+    let Some(record) = transcript else {
+        return Ok(None);
+    };
+
+    let segments: Vec<TranscriptSegment> = serde_json::from_str(&record.segments_json)
+        .map_err(|_| TranscribeError::TranscriptParseFailed)?;
+
+    Ok(Some(TranscriptionResult {
+        transcript_id: record.id,
+        lecture_id: record.lecture_id,
+        full_text: record.full_text,
+        segments,
+        model_used: record.model_used,
+    }))
 }
 
 fn rebuild_full_text(segments: &[TranscriptSegment]) -> String {

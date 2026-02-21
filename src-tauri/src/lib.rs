@@ -9,18 +9,19 @@ use tauri::Manager;
 use commands::audio::{
     accept_audio_file, pick_audio_file, start_recording, stop_recording, RecordingState,
 };
-use commands::settings::{check_ollama_status, get_settings, save_settings};
+use commands::library::{delete_lecture, export_all_lecture_data, list_lectures, search_lectures};
 use commands::llm::{check_llm_availability, generate_llm_response};
-use commands::transcribe::{
-    check_whisper_models, download_whisper_model, get_lecture_audio_url, transcribe_audio,
-    update_transcript_segment,
-};
 use commands::pipeline::{
     export_flashcards_anki, export_flashcards_tsv, export_notes_markdown, get_flashcards,
     get_mindmap, get_notes, get_pipeline_status, get_quiz, regenerate_mindmap, regenerate_notes,
     regenerate_quiz, save_quiz_attempt, start_pipeline,
 };
 use commands::research::{get_lecture_papers, search_related_papers};
+use commands::settings::{check_ollama_status, get_settings, save_settings};
+use commands::transcribe::{
+    check_whisper_models, download_whisper_model, get_lecture_audio_url, get_lecture_transcript,
+    transcribe_audio, update_transcript_segment,
+};
 use db::init_database;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,6 +47,7 @@ pub fn run() {
             transcribe_audio,
             update_transcript_segment,
             get_lecture_audio_url,
+            get_lecture_transcript,
             generate_llm_response,
             check_llm_availability,
             start_pipeline,
@@ -63,6 +65,10 @@ pub fn run() {
             regenerate_mindmap,
             export_flashcards_anki,
             export_flashcards_tsv,
+            list_lectures,
+            search_lectures,
+            delete_lecture,
+            export_all_lecture_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

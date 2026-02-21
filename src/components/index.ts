@@ -6,3 +6,4 @@ export * from "./Transcript";
 export * from "./Notes";
 export * from "./MindMap";
 export * from "./Flashcards";
+export * from "./Library";

@@ -40,28 +40,32 @@ export default function Pipeline() {
       <div className="flex flex-wrap gap-3 pt-2">
         <button
           type="button"
-          onClick={() => navigate("/notes")}
+          onClick={() => currentLectureId && navigate(`/lecture/${currentLectureId}/notes`)}
+          disabled={!currentLectureId}
           className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
         >
           View Notes
         </button>
         <button
           type="button"
-          onClick={() => navigate("/quiz")}
+          onClick={() => currentLectureId && navigate(`/lecture/${currentLectureId}/quiz`)}
+          disabled={!currentLectureId}
           className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
         >
           View Quiz
         </button>
         <button
           type="button"
-          onClick={() => navigate("/flashcards")}
+          onClick={() => currentLectureId && navigate(`/lecture/${currentLectureId}/flashcards`)}
+          disabled={!currentLectureId}
           className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
         >
           View Flashcards
         </button>
         <button
           type="button"
-          onClick={() => navigate("/mind-map")}
+          onClick={() => currentLectureId && navigate(`/lecture/${currentLectureId}/mindmap`)}
+          disabled={!currentLectureId}
           className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
         >
           View Mind Map

@@ -47,6 +47,12 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
         );
 
+        CREATE VIRTUAL TABLE IF NOT EXISTS lecture_search_fts USING fts5(
+            lecture_id UNINDEXED,
+            transcript_text,
+            notes_text
+        );
+
         CREATE TABLE IF NOT EXISTS quizzes (
             id TEXT PRIMARY KEY,
             lecture_id TEXT NOT NULL UNIQUE,
@@ -89,9 +95,32 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
         );
         "#,
-    )
+    )?;
 
-    // Note: ALTER TABLE cannot be wrapped in IF NOT EXISTS in SQLite,
-    // so new columns for existing tables are handled by CREATE TABLE IF NOT EXISTS
-    // with the columns already present above.
+    // Backfill additive columns for users with databases created before newer schema versions.
+    ensure_column_exists(connection, "lectures", "summary", "TEXT")?;
+    ensure_column_exists(connection, "lectures", "keywords_json", "TEXT")?;
+
+    Ok(())
+}
+
+fn ensure_column_exists(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> rusqlite::Result<()> {
+    let pragma = format!("PRAGMA table_info({table})");
+    let mut statement = connection.prepare(&pragma)?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let existing_column: String = row.get(1)?;
+        if existing_column == column {
+            return Ok(());
+        }
+    }
+
+    let alter_statement = format!("ALTER TABLE {table} ADD COLUMN {column} {definition}");
+    connection.execute(&alter_statement, [])?;
+    Ok(())
 }

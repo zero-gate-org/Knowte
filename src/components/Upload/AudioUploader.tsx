@@ -33,6 +33,7 @@ const formatSize = (sizeBytes: number) => {
 
 const toLecture = (metadata: AudioFileMetadata): Lecture => ({
   id: metadata.id,
+  title: metadata.filename,
   filename: metadata.filename,
   audioPath: metadata.path,
   duration: metadata.duration_seconds,
@@ -97,7 +98,7 @@ export default function AudioUploader() {
       await startPipeline(lectureId);
 
       // Navigate to the pipeline progress view
-      navigate("/pipeline");
+      navigate(`/lecture/${lectureId}/pipeline`);
     } catch (transcriptionError) {
       const message =
         transcriptionError instanceof Error
