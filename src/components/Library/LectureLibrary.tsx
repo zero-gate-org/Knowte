@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   deleteLecture,
+  estimatePipelineWork,
   exportAllLectureData,
   listLectures,
   searchLectures,
-  startPipeline,
+  startPipelineWithOptions,
 } from "../../lib/tauriApi";
 import type { Lecture, LectureStatus, LectureSummary } from "../../lib/types";
 import { useLectureStore, useSettingsStore } from "../../stores";
@@ -214,7 +215,15 @@ export default function LectureLibrary() {
       try {
         setCurrentLecture(lecture.id);
         updateLecture(lecture.id, { status: "processing", error: undefined });
-        await startPipeline(lecture.id);
+        const estimate = await estimatePipelineWork(lecture.id);
+        const estimateMessage = `This lecture will process ~${estimate.token_estimate.toLocaleString()} tokens (estimated ${estimate.estimated_minutes_min}-${estimate.estimated_minutes_max} min).`;
+        let useCache = true;
+        if (estimate.has_cached_results) {
+          useCache = window.confirm(
+            `${estimateMessage}\n\nCached results are available for ${estimate.cached_stage_count} stage(s).\n\nPress OK to use cached results, or Cancel to regenerate everything.`,
+          );
+        }
+        await startPipelineWithOptions(lecture.id, { useCache });
         navigate(`/lecture/${lecture.id}/pipeline`);
       } catch (processError) {
         setError(processError instanceof Error ? processError.message : String(processError));

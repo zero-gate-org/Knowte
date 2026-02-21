@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   BrowserRouter,
@@ -14,21 +14,20 @@ import { useHotkeys } from "./hooks";
 import { HOTKEY_EVENT_NAMES, LECTURE_VIEW_SHORTCUTS } from "./lib/hotkeys";
 import { listLectures } from "./lib/tauriApi";
 import type { Lecture, LectureSummary, ThemeMode } from "./lib/types";
-import {
-  Flashcards,
-  Library,
-  Compare,
-  MindMap,
-  Notes,
-  Pipeline,
-  Quiz,
-  Research,
-  Settings,
-  Transcript,
-  Upload,
-} from "./pages";
 import { useLectureStore, useSettingsStore, useToastStore, useUiStore } from "./stores";
 import "./index.css";
+
+const Upload = lazy(() => import("./pages/Upload"));
+const Library = lazy(() => import("./pages/Library"));
+const Transcript = lazy(() => import("./pages/Transcript"));
+const Pipeline = lazy(() => import("./pages/Pipeline"));
+const Notes = lazy(() => import("./pages/Notes"));
+const Quiz = lazy(() => import("./pages/Quiz"));
+const Research = lazy(() => import("./pages/Research"));
+const MindMap = lazy(() => import("./pages/MindMap"));
+const Flashcards = lazy(() => import("./pages/Flashcards"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Compare = lazy(() => import("./pages/Compare"));
 
 const LECTURE_ROUTE_LABELS: Record<string, string> = Object.fromEntries(
   LECTURE_VIEW_SHORTCUTS.map((shortcut) => [shortcut.segment, shortcut.label]),
@@ -367,20 +366,28 @@ function AppLayout() {
             {routeAnnouncement}
           </p>
           <div key={location.pathname} className="h-full animate-view-in">
-            <Routes>
-              <Route path="/" element={<Library />} />
-              <Route path="/upload" element={<Upload />} />
-              <Route path="/compare" element={<Compare />} />
-              <Route path="/lecture/:id/transcript" element={<Transcript />} />
-              <Route path="/lecture/:id/pipeline" element={<Pipeline />} />
-              <Route path="/lecture/:id/notes" element={<Notes />} />
-              <Route path="/lecture/:id/quiz" element={<Quiz />} />
-              <Route path="/lecture/:id/research" element={<Research />} />
-              <Route path="/lecture/:id/mindmap" element={<MindMap />} />
-              <Route path="/lecture/:id/flashcards" element={<Flashcards />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <Suspense
+              fallback={(
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                  Loading view...
+                </div>
+              )}
+            >
+              <Routes>
+                <Route path="/" element={<Library />} />
+                <Route path="/upload" element={<Upload />} />
+                <Route path="/compare" element={<Compare />} />
+                <Route path="/lecture/:id/transcript" element={<Transcript />} />
+                <Route path="/lecture/:id/pipeline" element={<Pipeline />} />
+                <Route path="/lecture/:id/notes" element={<Notes />} />
+                <Route path="/lecture/:id/quiz" element={<Quiz />} />
+                <Route path="/lecture/:id/research" element={<Research />} />
+                <Route path="/lecture/:id/mindmap" element={<MindMap />} />
+                <Route path="/lecture/:id/flashcards" element={<Flashcards />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </main>
       </div>

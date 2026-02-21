@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
+use fs2::available_space;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -18,6 +19,8 @@ pub struct Settings {
     pub enable_research: bool,
     #[serde(default = "Settings::default_theme")]
     pub theme: String,
+    #[serde(default = "Settings::default_delete_audio_after_processing")]
+    pub delete_audio_after_processing: bool,
 }
 
 impl Default for Settings {
@@ -37,6 +40,7 @@ impl Default for Settings {
             export_path,
             enable_research: true,
             theme: Self::default_theme(),
+            delete_audio_after_processing: Self::default_delete_audio_after_processing(),
         }
     }
 }
@@ -52,6 +56,10 @@ impl Settings {
 
     fn default_theme() -> String {
         "dark".to_string()
+    }
+
+    fn default_delete_audio_after_processing() -> bool {
+        false
     }
 }
 
@@ -70,6 +78,15 @@ pub struct OllamaStatus {
     pub connected: bool,
     pub models: Vec<String>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StorageUsage {
+    pub app_data_dir: String,
+    pub app_data_bytes: u64,
+    pub lectures_bytes: u64,
+    pub prepared_audio_bytes: u64,
+    pub free_bytes: u64,
 }
 
 fn get_settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -162,4 +179,51 @@ pub fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
     fs::write(&settings_path, &content).map_err(|e| format!("Failed to write settings: {}", e))?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_storage_usage(app: AppHandle) -> Result<StorageUsage, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Unable to resolve the app data directory.".to_string())?;
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|_| "Unable to create the app data directory.".to_string())?;
+
+    let lectures_dir = app_data_dir.join("lectures");
+    let prepared_audio_dir = app_data_dir.join("prepared-audio");
+
+    let app_data_bytes = directory_size(&app_data_dir)?;
+    let lectures_bytes = directory_size(&lectures_dir)?;
+    let prepared_audio_bytes = directory_size(&prepared_audio_dir)?;
+    let free_bytes =
+        available_space(&app_data_dir).map_err(|_| "Unable to read free disk space.".to_string())?;
+
+    Ok(StorageUsage {
+        app_data_dir: app_data_dir.to_string_lossy().to_string(),
+        app_data_bytes,
+        lectures_bytes,
+        prepared_audio_bytes,
+        free_bytes,
+    })
+}
+
+fn directory_size(path: &std::path::Path) -> Result<u64, String> {
+    if !path.exists() {
+        return Ok(0);
+    }
+
+    if path.is_file() {
+        let metadata = fs::metadata(path).map_err(|_| "Unable to read file metadata.".to_string())?;
+        return Ok(metadata.len());
+    }
+
+    let mut total = 0_u64;
+    let entries = fs::read_dir(path).map_err(|_| "Unable to read directory.".to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|_| "Unable to read directory entry.".to_string())?;
+        total = total.saturating_add(directory_size(&entry.path())?);
+    }
+
+    Ok(total)
 }

@@ -1,7 +1,16 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useMemo, useState } from "react";
-import { startPipeline, transcribeAudio } from "../../lib/tauriApi";
-import type { AudioFileMetadata, Lecture, PipelineStageEvent } from "../../lib/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  estimatePipelineWork,
+  startPipelineWithOptions,
+  transcribeAudio,
+} from "../../lib/tauriApi";
+import type {
+  AudioFileMetadata,
+  Lecture,
+  PipelineStageEvent,
+  TranscriptionProgress,
+} from "../../lib/types";
 import { useLectureStore, useToastStore } from "../../stores";
 import { ViewHeader } from "../Layout";
 import DropZone from "./DropZone";
@@ -69,6 +78,9 @@ export default function AudioUploader() {
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [activeQueueLectureId, setActiveQueueLectureId] = useState<string | null>(null);
   const [processHint, setProcessHint] = useState<string | null>(null);
+  const [transcriptionProgress, setTranscriptionProgress] = useState<
+    Record<string, TranscriptionProgress>
+  >({});
   const pushToast = useToastStore((state) => state.pushToast);
 
   const {
@@ -90,7 +102,39 @@ export default function AudioUploader() {
     [queueItems],
   );
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<TranscriptionProgress>("transcription-progress", (event) => {
+      const payload = event.payload;
+      setTranscriptionProgress((current) => ({
+        ...current,
+        [payload.lecture_id]: payload,
+      }));
+    })
+      .then((unsubscribe) => {
+        unlisten = unsubscribe;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
   const hasQueueItems = queueItems.length > 0;
+
+  const formatEta = (seconds: number | null | undefined) => {
+    if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
+      return null;
+    }
+
+    const rounded = Math.round(seconds);
+    const mins = Math.floor(rounded / 60);
+    const secs = rounded % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const waitForPipelineCompletion = useCallback((lectureId: string) => {
     return new Promise<void>((resolve, reject) => {
@@ -246,8 +290,19 @@ export default function AudioUploader() {
           });
           setCurrentLecture(lectureId);
 
-          setProcessHint(`Running AI pipeline for ${filename}...`);
-          await startPipeline(lectureId);
+          const estimate = await estimatePipelineWork(lectureId);
+          const estimateMessage = `This lecture will process ~${estimate.token_estimate.toLocaleString()} tokens (estimated ${estimate.estimated_minutes_min}-${estimate.estimated_minutes_max} min).`;
+          let useCache = true;
+          if (estimate.has_cached_results) {
+            useCache = window.confirm(
+              `${estimateMessage}\n\nCached results are available for ${estimate.cached_stage_count} stage(s).\n\nPress OK to use cached results, or Cancel to regenerate everything.`,
+            );
+          }
+
+          setProcessHint(
+            `${estimateMessage} Running AI pipeline for ${filename} (${useCache ? "cache enabled" : "regenerating"}).`,
+          );
+          await startPipelineWithOptions(lectureId, { useCache });
           await waitForPipelineCompletion(lectureId);
 
           updateLecture(lectureId, { status: "complete", error: undefined });
@@ -413,7 +468,22 @@ export default function AudioUploader() {
                 </div>
 
                 {activeQueueLectureId === item.lectureId && item.status === "processing" && (
-                  <p className="mt-2 text-xs text-blue-300">Currently processing...</p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-blue-300">Currently processing...</p>
+                    {transcriptionProgress[item.lectureId] && (
+                      <p className="text-xs text-slate-300">
+                        Transcription {transcriptionProgress[item.lectureId].percent}%{" "}
+                        {typeof transcriptionProgress[item.lectureId].chunk_index === "number" &&
+                        typeof transcriptionProgress[item.lectureId].chunk_total === "number"
+                          ? `• chunk ${transcriptionProgress[item.lectureId].chunk_index}/${transcriptionProgress[item.lectureId].chunk_total}`
+                          : ""}
+                        {typeof transcriptionProgress[item.lectureId].chunk_percent === "number"
+                          ? ` • segment ${Math.round(transcriptionProgress[item.lectureId].chunk_percent ?? 0)}%`
+                          : ""}
+                        {formatEta(transcriptionProgress[item.lectureId].eta_seconds) ? ` • ETA ${formatEta(transcriptionProgress[item.lectureId].eta_seconds)}` : ""}
+                      </p>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

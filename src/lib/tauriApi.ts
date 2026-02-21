@@ -5,8 +5,10 @@ import type {
   MergedFlashcardsResult,
   OllamaStatus,
   Paper,
+  PipelineEstimate,
   PipelineStageRecord,
   Settings,
+  StorageUsage,
   TranscriptUpdateResult,
   TranscriptionResult,
 } from "./types";
@@ -70,6 +72,10 @@ export async function getSettings(): Promise<Settings> {
 
 export async function saveSettings(settings: Settings): Promise<void> {
   return invoke("save_settings", { settings });
+}
+
+export async function getStorageUsage(): Promise<StorageUsage> {
+  return invoke<StorageUsage>("get_storage_usage");
 }
 
 export async function pickAudioFile(): Promise<string | null> {
@@ -169,12 +175,26 @@ export async function startPipeline(lectureId: string): Promise<void> {
   return invoke("start_pipeline", { lectureId });
 }
 
+export async function startPipelineWithOptions(
+  lectureId: string,
+  options?: { useCache?: boolean },
+): Promise<void> {
+  return invoke("start_pipeline", {
+    lectureId,
+    use_cache: options?.useCache ?? true,
+  });
+}
+
 /**
  * Get the current pipeline stage statuses for a lecture from the database.
  * Useful for restoring UI state after navigation.
  */
 export async function getPipelineStatus(lectureId: string): Promise<PipelineStageRecord[]> {
   return invoke<PipelineStageRecord[]>("get_pipeline_status", { lectureId });
+}
+
+export async function estimatePipelineWork(lectureId: string): Promise<PipelineEstimate> {
+  return invoke<PipelineEstimate>("estimate_pipeline_work", { lectureId });
 }
 
 /** Retrieve structured notes JSON for a lecture (null if not yet generated). */

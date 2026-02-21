@@ -46,12 +46,14 @@ function SpinnerIcon() {
 function StageRow({
   stage,
   streamingPreview,
+  sectionProgressText,
   isMutating,
   onRetry,
   onSkip,
 }: {
   stage: PipelineStage;
   streamingPreview: string;
+  sectionProgressText?: string;
   isMutating: boolean;
   onRetry: () => void;
   onSkip: () => void;
@@ -112,6 +114,10 @@ function StageRow({
           {stage.status === "running" ? "In progress…" : stage.status}
         </span>
       </div>
+
+      {sectionProgressText && (
+        <p className="mt-1 text-[11px] text-slate-400">{sectionProgressText}</p>
+      )}
 
       {/* Streaming preview while running */}
       {stage.status === "running" && streamingPreview && (
@@ -175,6 +181,16 @@ export default function ProgressTracker({
   );
   const [stagesComplete, setStagesComplete] = useState(0);
   const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
+  const [sectionProgress, setSectionProgress] = useState<
+    Record<
+      string,
+      {
+        total: number;
+        completed: number[];
+        running: number | null;
+      }
+    >
+  >({});
   const [isDone, setIsDone] = useState(false);
   const [pipelineWarning, setPipelineWarning] = useState<string | null>(null);
   const [stageActionName, setStageActionName] = useState<string | null>(null);
@@ -188,6 +204,7 @@ export default function ProgressTracker({
     setStages(PIPELINE_STAGES.map((s) => ({ ...s, status: "pending" as const })));
     setStagesComplete(0);
     setStreamingTokens({});
+    setSectionProgress({});
     setIsDone(false);
     setPipelineWarning(null);
     setStageActionName(null);
@@ -208,6 +225,30 @@ export default function ProgressTracker({
         if (payload.stage === "pipeline" && payload.status === "complete") {
           setIsDone(true);
           onPipelineComplete?.();
+          return;
+        }
+
+        const sectionMatch = payload.stage.match(/^(summary|notes|quiz)_(?:chunk|section)_(\d+)$/);
+        if (sectionMatch) {
+          const parentStage = sectionMatch[1];
+          const index = Number(sectionMatch[2]);
+          if (Number.isFinite(index) && index > 0) {
+            setSectionProgress((prev) => {
+              const current = prev[parentStage] ?? { total: 0, completed: [], running: null };
+              const nextCompleted = [...current.completed];
+              if (payload.status === "complete" && !nextCompleted.includes(index)) {
+                nextCompleted.push(index);
+              }
+              return {
+                ...prev,
+                [parentStage]: {
+                  total: Math.max(current.total, index),
+                  completed: nextCompleted,
+                  running: payload.status === "starting" ? index : current.running === index ? null : current.running,
+                },
+              };
+            });
+          }
           return;
         }
 
@@ -368,16 +409,23 @@ export default function ProgressTracker({
 
       {/* Stage list */}
       <div className="space-y-2">
-        {stages.map((stage) => (
-          <StageRow
-            key={stage.name}
-            stage={stage}
-            streamingPreview={streamingTokens[stage.name] ?? ""}
-            isMutating={stageActionName === stage.name}
-            onRetry={() => void handleRetryStage(stage.name)}
-            onSkip={() => handleSkipStage(stage.name)}
-          />
-        ))}
+        {stages.map((stage) => {
+          const section = sectionProgress[stage.name];
+          const sectionProgressText = section
+            ? `Sections ${section.completed.length}/${section.total}${section.running ? ` • processing ${section.running}` : ""}`
+            : undefined;
+          return (
+            <StageRow
+              key={stage.name}
+              stage={stage}
+              streamingPreview={streamingTokens[stage.name] ?? ""}
+              sectionProgressText={sectionProgressText}
+              isMutating={stageActionName === stage.name}
+              onRetry={() => void handleRetryStage(stage.name)}
+              onSkip={() => handleSkipStage(stage.name)}
+            />
+          );
+        })}
       </div>
 
       {isDone && (

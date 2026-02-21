@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::errors::Error as SymphoniaError;
@@ -29,6 +30,9 @@ const TARGET_SAMPLE_RATE: u32 = 16_000;
 const WHISPER_MODEL_REPOSITORY: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 const SILENCE_AVERAGE_THRESHOLD: f32 = 0.0005;
 const SILENCE_PEAK_THRESHOLD: f32 = 0.01;
+const LONG_AUDIO_THRESHOLD_SECONDS: f64 = 30.0 * 60.0;
+const TRANSCRIPTION_CHUNK_SECONDS: f64 = 5.0 * 60.0;
+const TRANSCRIPTION_OVERLAP_SECONDS: f64 = 10.0;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgressEvent {
@@ -40,6 +44,11 @@ pub struct DownloadProgressEvent {
 pub struct TranscriptionProgressEvent {
     pub lecture_id: String,
     pub percent: u8,
+    pub chunk_index: Option<u32>,
+    pub chunk_total: Option<u32>,
+    pub chunk_percent: Option<u8>,
+    pub eta_seconds: Option<u64>,
+    pub realtime_factor: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -457,34 +466,122 @@ fn transcribe_audio_impl(
         emit_transcription_progress(&app, &lecture_id, 3);
         let prepared_audio_path =
             prepare_audio_for_whisper(&app, &lecture_id, Path::new(&lecture.audio_path))?;
-        let whisper_input = read_wav_samples(&prepared_audio_path)?;
-        if is_silent_audio(&whisper_input) {
+        if is_wav_silent(&prepared_audio_path)? {
             return Err(TranscribeError::SilentAudioDetected);
         }
         emit_transcription_progress(&app, &lecture_id, 10);
 
-        let mut transcription = run_whisper_transcription(
-            &app,
-            &lecture_id,
-            &model_path,
-            &language,
-            &whisper_input,
-            &model_used,
-        )?;
+        let total_samples = read_wav_total_samples(&prepared_audio_path)?;
+        let total_audio_seconds = total_samples as f64 / TARGET_SAMPLE_RATE as f64;
+        let started_at = Instant::now();
 
-        if transcription.full_text.split_whitespace().next().is_none() {
+        let mut segments: Vec<TranscriptSegment> = Vec::new();
+        if total_audio_seconds > LONG_AUDIO_THRESHOLD_SECONDS {
+            let chunk_samples = (TRANSCRIPTION_CHUNK_SECONDS * TARGET_SAMPLE_RATE as f64) as usize;
+            let overlap_samples = (TRANSCRIPTION_OVERLAP_SECONDS * TARGET_SAMPLE_RATE as f64) as usize;
+
+            let mut windows: Vec<(usize, usize, usize, usize)> = Vec::new();
+            let mut chunk_start_unique = 0usize;
+            while chunk_start_unique < total_samples {
+                let chunk_end_unique = (chunk_start_unique + chunk_samples).min(total_samples);
+                let read_start = chunk_start_unique.saturating_sub(overlap_samples);
+                let read_end = (chunk_end_unique + overlap_samples).min(total_samples);
+                windows.push((read_start, read_end, chunk_start_unique, chunk_end_unique));
+                chunk_start_unique = chunk_end_unique;
+            }
+
+            let chunk_total = windows.len() as u32;
+            let mut last_segment_end = 0.0_f64;
+
+            for (index, (read_start, read_end, unique_start, unique_end)) in windows.iter().enumerate()
+            {
+                let whisper_input = read_wav_samples_range(&prepared_audio_path, *read_start, *read_end)?;
+                let chunk_context = ChunkProgressContext {
+                    chunk_index: (index + 1) as u32,
+                    chunk_total,
+                    chunk_offset_seconds: *read_start as f64 / TARGET_SAMPLE_RATE as f64,
+                    chunk_unique_seconds: (*unique_end - *unique_start) as f64
+                        / TARGET_SAMPLE_RATE as f64,
+                    processed_unique_seconds_before: *unique_start as f64 / TARGET_SAMPLE_RATE as f64,
+                    total_audio_seconds,
+                };
+                let chunk_segments = run_whisper_transcription(
+                    &app,
+                    &lecture_id,
+                    &model_path,
+                    &language,
+                    &whisper_input,
+                    chunk_context,
+                    started_at,
+                )?;
+
+                let unique_start_seconds = *unique_start as f64 / TARGET_SAMPLE_RATE as f64;
+                let unique_end_seconds = *unique_end as f64 / TARGET_SAMPLE_RATE as f64;
+
+                for mut segment in chunk_segments {
+                    if segment.end <= unique_start_seconds || segment.start >= unique_end_seconds {
+                        continue;
+                    }
+
+                    segment.start = segment.start.max(unique_start_seconds);
+                    segment.end = segment.end.min(unique_end_seconds);
+                    if segment.end <= segment.start {
+                        continue;
+                    }
+
+                    if segment.end <= last_segment_end + 0.05 {
+                        continue;
+                    }
+                    if segment.start < last_segment_end {
+                        segment.start = last_segment_end;
+                    }
+                    last_segment_end = segment.end;
+                    segments.push(segment);
+                }
+            }
+        } else {
+            let whisper_input = read_wav_samples(&prepared_audio_path)?;
+            let chunk_context = ChunkProgressContext {
+                chunk_index: 1,
+                chunk_total: 1,
+                chunk_offset_seconds: 0.0,
+                chunk_unique_seconds: total_audio_seconds,
+                processed_unique_seconds_before: 0.0,
+                total_audio_seconds,
+            };
+            segments = run_whisper_transcription(
+                &app,
+                &lecture_id,
+                &model_path,
+                &language,
+                &whisper_input,
+                chunk_context,
+                started_at,
+            )?;
+        }
+
+        let full_text = rebuild_full_text(&segments);
+        if full_text.split_whitespace().next().is_none() {
             return Err(TranscribeError::EmptyTranscript);
         }
 
-        let segments_json = serde_json::to_string(&transcription.segments)
+        let segments_json = serde_json::to_string(&segments)
             .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
         let transcript_record = TranscriptRecord {
             id: Uuid::new_v4().to_string(),
             lecture_id: lecture_id.clone(),
-            full_text: transcription.full_text.clone(),
+            full_text: full_text.clone(),
             segments_json,
             model_used,
             created_at: Utc::now().to_rfc3339(),
+        };
+
+        let mut transcription = TranscriptionResult {
+            transcript_id: String::new(),
+            lecture_id: lecture_id.clone(),
+            full_text,
+            segments,
+            model_used: transcript_record.model_used.clone(),
         };
 
         let connection = database
@@ -510,14 +607,25 @@ fn transcribe_audio_impl(
     outcome
 }
 
+#[derive(Clone, Copy)]
+struct ChunkProgressContext {
+    chunk_index: u32,
+    chunk_total: u32,
+    chunk_offset_seconds: f64,
+    chunk_unique_seconds: f64,
+    processed_unique_seconds_before: f64,
+    total_audio_seconds: f64,
+}
+
 fn run_whisper_transcription(
     app: &AppHandle,
     lecture_id: &str,
     model_path: &Path,
     language: &str,
     whisper_input: &[f32],
-    model_used: &str,
-) -> Result<TranscriptionResult, TranscribeError> {
+    progress_context: ChunkProgressContext,
+    started_at: Instant,
+) -> Result<Vec<TranscriptSegment>, TranscribeError> {
     let model_path_string = model_path.to_string_lossy().to_string();
     let context =
         WhisperContext::new_with_params(&model_path_string, WhisperContextParameters::default())
@@ -528,6 +636,7 @@ fn run_whisper_transcription(
 
     let progress_app = app.clone();
     let progress_lecture_id = lecture_id.to_string();
+    let total_audio_seconds = progress_context.total_audio_seconds.max(1.0);
 
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_print_special(false);
@@ -540,16 +649,34 @@ fn run_whisper_transcription(
         params.set_language(Some(language));
     }
     params.set_progress_callback_safe(move |progress: i32| {
-        let clamped = progress.clamp(10, 99) as u8;
-        progress_app
-            .emit(
-                "transcription-progress",
-                TranscriptionProgressEvent {
-                    lecture_id: progress_lecture_id.clone(),
-                    percent: clamped,
-                },
-            )
-            .ok();
+        let chunk_percent = progress.clamp(0, 100) as u8;
+        let processed_unique_seconds = progress_context.processed_unique_seconds_before
+            + progress_context.chunk_unique_seconds * (chunk_percent as f64 / 100.0);
+        let overall_ratio = (processed_unique_seconds / total_audio_seconds).clamp(0.0, 1.0);
+        let overall_percent = (10.0 + overall_ratio * 89.0).round().clamp(10.0, 99.0) as u8;
+
+        let elapsed = started_at.elapsed().as_secs_f64();
+        let realtime_factor = if elapsed > 0.0 {
+            Some(processed_unique_seconds / elapsed)
+        } else {
+            None
+        };
+        let eta_seconds = realtime_factor
+            .filter(|factor| *factor > 0.0)
+            .map(|factor| {
+                ((total_audio_seconds - processed_unique_seconds).max(0.0) / factor).ceil() as u64
+            });
+
+        emit_transcription_progress_detailed(
+            &progress_app,
+            &progress_lecture_id,
+            overall_percent,
+            Some(progress_context.chunk_index),
+            Some(progress_context.chunk_total),
+            Some(chunk_percent),
+            eta_seconds,
+            realtime_factor,
+        );
     });
 
     state
@@ -575,35 +702,12 @@ fn run_whisper_transcription(
         segments.push(TranscriptSegment { start, end, text });
     }
 
-    let full_text = rebuild_full_text(&segments);
-
-    Ok(TranscriptionResult {
-        transcript_id: String::new(),
-        lecture_id: lecture_id.to_string(),
-        full_text,
-        segments,
-        model_used: model_used.to_string(),
-    })
-}
-
-fn is_silent_audio(samples: &[f32]) -> bool {
-    if samples.is_empty() {
-        return true;
+    for segment in &mut segments {
+        segment.start += progress_context.chunk_offset_seconds;
+        segment.end += progress_context.chunk_offset_seconds;
     }
 
-    let mut sum_abs = 0.0_f32;
-    let mut peak = 0.0_f32;
-
-    for sample in samples {
-        let amplitude = sample.abs();
-        sum_abs += amplitude;
-        if amplitude > peak {
-            peak = amplitude;
-        }
-    }
-
-    let average = sum_abs / samples.len() as f32;
-    average < SILENCE_AVERAGE_THRESHOLD && peak < SILENCE_PEAK_THRESHOLD
+    Ok(segments)
 }
 
 fn prepare_audio_for_whisper(
@@ -817,6 +921,116 @@ fn read_wav_samples(path: &Path) -> Result<Vec<f32>, TranscribeError> {
     }
 }
 
+fn read_wav_total_samples(path: &Path) -> Result<usize, TranscribeError> {
+    let reader = WavReader::open(path).map_err(|_| TranscribeError::WavReadFailed)?;
+    let spec = reader.spec();
+    if spec.channels != 1 || spec.sample_rate != TARGET_SAMPLE_RATE {
+        return Err(TranscribeError::WavReadFailed);
+    }
+    Ok(reader.duration() as usize)
+}
+
+fn read_wav_samples_range(
+    path: &Path,
+    start_sample: usize,
+    end_sample: usize,
+) -> Result<Vec<f32>, TranscribeError> {
+    if end_sample <= start_sample {
+        return Ok(Vec::new());
+    }
+
+    let mut reader = WavReader::open(path).map_err(|_| TranscribeError::WavReadFailed)?;
+    let spec = reader.spec();
+    if spec.channels != 1 || spec.sample_rate != TARGET_SAMPLE_RATE {
+        return Err(TranscribeError::WavReadFailed);
+    }
+
+    if reader.seek(start_sample as u32).is_err() {
+        return Err(TranscribeError::WavReadFailed);
+    }
+
+    let count = end_sample - start_sample;
+    let mut values = Vec::with_capacity(count);
+    match spec.sample_format {
+        SampleFormat::Int => {
+            if spec.bits_per_sample <= 16 {
+                for sample in reader.samples::<i16>().take(count) {
+                    let sample = sample.map_err(|_| TranscribeError::WavReadFailed)?;
+                    values.push(sample as f32 / i16::MAX as f32);
+                }
+            } else {
+                for sample in reader.samples::<i32>().take(count) {
+                    let sample = sample.map_err(|_| TranscribeError::WavReadFailed)?;
+                    values.push(sample as f32 / i32::MAX as f32);
+                }
+            }
+        }
+        SampleFormat::Float => {
+            for sample in reader.samples::<f32>().take(count) {
+                values.push(sample.map_err(|_| TranscribeError::WavReadFailed)?);
+            }
+        }
+    }
+
+    Ok(values)
+}
+
+fn is_wav_silent(path: &Path) -> Result<bool, TranscribeError> {
+    let mut reader = WavReader::open(path).map_err(|_| TranscribeError::WavReadFailed)?;
+    let spec = reader.spec();
+    if spec.channels != 1 || spec.sample_rate != TARGET_SAMPLE_RATE {
+        return Err(TranscribeError::WavReadFailed);
+    }
+
+    let mut sum_abs = 0.0_f32;
+    let mut peak = 0.0_f32;
+    let mut count = 0usize;
+
+    match spec.sample_format {
+        SampleFormat::Int => {
+            if spec.bits_per_sample <= 16 {
+                for sample in reader.samples::<i16>() {
+                    let sample = sample.map_err(|_| TranscribeError::WavReadFailed)?;
+                    let amplitude = (sample as f32 / i16::MAX as f32).abs();
+                    sum_abs += amplitude;
+                    if amplitude > peak {
+                        peak = amplitude;
+                    }
+                    count += 1;
+                }
+            } else {
+                for sample in reader.samples::<i32>() {
+                    let sample = sample.map_err(|_| TranscribeError::WavReadFailed)?;
+                    let amplitude = (sample as f32 / i32::MAX as f32).abs();
+                    sum_abs += amplitude;
+                    if amplitude > peak {
+                        peak = amplitude;
+                    }
+                    count += 1;
+                }
+            }
+        }
+        SampleFormat::Float => {
+            for sample in reader.samples::<f32>() {
+                let sample = sample.map_err(|_| TranscribeError::WavReadFailed)?;
+                let amplitude = sample.abs();
+                sum_abs += amplitude;
+                if amplitude > peak {
+                    peak = amplitude;
+                }
+                count += 1;
+            }
+        }
+    }
+
+    if count == 0 {
+        return Ok(true);
+    }
+
+    let average = sum_abs / count as f32;
+    Ok(average < SILENCE_AVERAGE_THRESHOLD && peak < SILENCE_PEAK_THRESHOLD)
+}
+
 fn whisper_models_dir() -> Result<PathBuf, TranscribeError> {
     let models_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("whisper-models");
     fs::create_dir_all(&models_dir).map_err(|_| TranscribeError::WhisperModelDirUnavailable)?;
@@ -842,11 +1056,29 @@ fn get_model_path(model_size: &str) -> Result<PathBuf, TranscribeError> {
 }
 
 fn emit_transcription_progress(app: &AppHandle, lecture_id: &str, percent: u8) {
+    emit_transcription_progress_detailed(app, lecture_id, percent, None, None, None, None, None);
+}
+
+fn emit_transcription_progress_detailed(
+    app: &AppHandle,
+    lecture_id: &str,
+    percent: u8,
+    chunk_index: Option<u32>,
+    chunk_total: Option<u32>,
+    chunk_percent: Option<u8>,
+    eta_seconds: Option<u64>,
+    realtime_factor: Option<f64>,
+) {
     app.emit(
         "transcription-progress",
         TranscriptionProgressEvent {
             lecture_id: lecture_id.to_string(),
             percent,
+            chunk_index,
+            chunk_total,
+            chunk_percent,
+            eta_seconds,
+            realtime_factor,
         },
     )
     .ok();

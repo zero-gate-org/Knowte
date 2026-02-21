@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { List, type RowComponentProps } from "react-window";
 import { HOTKEY_EVENT_NAMES } from "../../lib/hotkeys";
 import type { Flashcard } from "../../lib/types";
 
@@ -16,6 +17,18 @@ interface StudyStats {
   known: number;
   almost: number;
   unknown: number;
+}
+
+interface VirtualizedCardIndexProps {
+  cards: CardState[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}
+
+interface VirtualizedRowProps {
+  cards: CardState[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
 }
 
 function usePrefersReducedMotion() {
@@ -201,6 +214,64 @@ function StudyComplete({ stats, total, onReviewAll, onReviewWeak }: StudyComplet
           Review all again
         </button>
       </div>
+    </div>
+  );
+}
+
+function VirtualizedCardIndex({
+  cards,
+  activeIndex,
+  onSelect,
+}: VirtualizedCardIndexProps) {
+  const rowHeight = 32;
+  const viewportHeight = 220;
+
+  const Row = ({
+    index,
+    style,
+    cards: rowCards,
+    activeIndex: rowActiveIndex,
+    onSelect: rowSelect,
+  }: RowComponentProps<VirtualizedRowProps>) => {
+    const entry = rowCards[index];
+    if (!entry) {
+      return null;
+    }
+    const isActive = index === rowActiveIndex;
+    return (
+      <button
+        type="button"
+        onClick={() => rowSelect(index)}
+        className={`flex w-full items-center justify-between px-2 text-left text-xs transition-colors ${
+          isActive ? "bg-blue-600/30 text-blue-100" : "text-slate-300 hover:bg-slate-800"
+        }`}
+        style={style}
+      >
+        <span className="truncate pr-2">
+          {index + 1}. {entry.card.front}
+        </span>
+        <span className="text-[10px] uppercase text-slate-500">{entry.pile}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Card Index (Virtualized)
+        </p>
+        <p className="text-[11px] text-slate-500">{cards.length} cards</p>
+      </div>
+      <List
+        className="rounded border border-slate-700 bg-slate-950/40"
+        rowComponent={Row}
+        rowCount={cards.length}
+        rowHeight={rowHeight}
+        rowProps={{ cards, activeIndex, onSelect }}
+        overscanCount={6}
+        style={{ height: viewportHeight }}
+      />
     </div>
   );
 }
@@ -497,6 +568,17 @@ export default function FlashcardViewer({ cards }: FlashcardViewerProps) {
                 </svg>
               </button>
             </div>
+          )}
+
+          {!studyMode && cardStates.length >= 80 && (
+            <VirtualizedCardIndex
+              cards={cardStates}
+              activeIndex={currentIndex}
+              onSelect={(index) => {
+                setCurrentIndex(index);
+                setIsFlipped(false);
+              }}
+            />
           )}
 
           {/* ── Sorting Buttons (study mode) ── */}

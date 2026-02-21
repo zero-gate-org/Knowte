@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { GLOBAL_SHORTCUTS, LECTURE_VIEW_SHORTCUTS } from "../../lib/hotkeys";
+import { getStorageUsage } from "../../lib/tauriApi";
 import { useSettingsStore, useToastStore } from "../../stores";
 import { ViewHeader } from "../Layout";
 import ModelSelector from "./ModelSelector";
 import PersonalizationConfig from "./PersonalizationConfig";
-import type { Settings } from "../../lib/types";
+import type { Settings, StorageUsage } from "../../lib/types";
 
 function renderShortcutKeys(keys: string) {
   return keys.split("+").map((part) => (
@@ -22,6 +23,36 @@ export default function SettingsPanel() {
     useSettingsStore();
   const pushToast = useToastStore((state) => state.pushToast);
   const [formData, setFormData] = useState<Settings | null>(null);
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
+  const [isStorageLoading, setIsStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
+
+  const formatBytes = (value: number) => {
+    if (!Number.isFinite(value) || value < 1024) {
+      return `${Math.max(0, Math.floor(value))} B`;
+    }
+    const units = ["KB", "MB", "GB", "TB"];
+    let size = value / 1024;
+    let index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    return `${size.toFixed(size >= 100 ? 0 : 1)} ${units[index]}`;
+  };
+
+  const loadStorageUsage = async () => {
+    setIsStorageLoading(true);
+    setStorageError(null);
+    try {
+      const usage = await getStorageUsage();
+      setStorageUsage(usage);
+    } catch (usageError) {
+      setStorageError(usageError instanceof Error ? usageError.message : String(usageError));
+    } finally {
+      setIsStorageLoading(false);
+    }
+  };
 
   useEffect(() => {
     void loadSettings();
@@ -32,6 +63,10 @@ export default function SettingsPanel() {
       setFormData(settings);
     }
   }, [settings]);
+
+  useEffect(() => {
+    void loadStorageUsage();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +179,67 @@ export default function SettingsPanel() {
             <p className="text-xs text-slate-400">
               Default location for exported files
             </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 rounded-lg border border-slate-700 bg-slate-800 p-4 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-200">Storage</h2>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <div className="relative mt-0.5">
+              <input
+                type="checkbox"
+                checked={formData.delete_audio_after_processing}
+                onChange={(e) => updateField("delete_audio_after_processing", e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                onClick={() =>
+                  updateField("delete_audio_after_processing", !formData.delete_audio_after_processing)
+                }
+                className={`w-10 h-5 rounded-full transition-colors ${
+                  formData.delete_audio_after_processing ? "bg-blue-600" : "bg-slate-600"
+                } flex items-center px-0.5 cursor-pointer`}
+              >
+                <div
+                  className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${
+                    formData.delete_audio_after_processing ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-200">Delete audio after processing</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Removes original and prepared audio files once pipeline generation finishes successfully.
+              </p>
+            </div>
+          </label>
+
+          <div className="rounded-md border border-slate-700 bg-slate-900/50 p-3">
+            {isStorageLoading ? (
+              <p className="text-xs text-slate-400">Loading storage usage…</p>
+            ) : storageUsage ? (
+              <div className="space-y-1.5 text-xs text-slate-300">
+                <p>App data: <span className="text-slate-100">{formatBytes(storageUsage.app_data_bytes)}</span></p>
+                <p>Lectures audio: <span className="text-slate-100">{formatBytes(storageUsage.lectures_bytes)}</span></p>
+                <p>Prepared audio: <span className="text-slate-100">{formatBytes(storageUsage.prepared_audio_bytes)}</span></p>
+                <p>Free disk space: <span className="text-slate-100">{formatBytes(storageUsage.free_bytes)}</span></p>
+                <p className="break-all text-slate-500">Path: {storageUsage.app_data_dir}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">Storage usage is unavailable.</p>
+            )}
+
+            {storageError && <p className="mt-2 text-xs text-red-300">{storageError}</p>}
+            <button
+              type="button"
+              onClick={() => void loadStorageUsage()}
+              disabled={isStorageLoading}
+              className="mt-3 rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-60"
+            >
+              {isStorageLoading ? "Refreshing…" : "Refresh usage"}
+            </button>
           </div>
         </div>
 

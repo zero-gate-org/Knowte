@@ -13,6 +13,10 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             summary TEXT,
             keywords_json TEXT
         );
+        CREATE INDEX IF NOT EXISTS idx_lectures_created_at
+            ON lectures(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_lectures_status
+            ON lectures(status);
 
         CREATE TABLE IF NOT EXISTS transcripts (
             id TEXT PRIMARY KEY,
@@ -38,6 +42,8 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_stages_lecture_stage
             ON pipeline_stages(lecture_id, stage_name);
+        CREATE INDEX IF NOT EXISTS idx_pipeline_stages_lecture_status
+            ON pipeline_stages(lecture_id, status);
 
         CREATE TABLE IF NOT EXISTS notes (
             id TEXT PRIMARY KEY,
@@ -94,6 +100,22 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             attempted_at TEXT NOT NULL,
             FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
         );
+        CREATE INDEX IF NOT EXISTS idx_quiz_attempts_lecture_attempted_at
+            ON quiz_attempts(lecture_id, attempted_at DESC);
+
+        CREATE TABLE IF NOT EXISTS llm_stage_cache (
+            id TEXT PRIMARY KEY,
+            lecture_id TEXT NOT NULL,
+            stage_name TEXT NOT NULL,
+            transcript_hash TEXT NOT NULL,
+            result_text TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_stage_cache_lookup
+            ON llm_stage_cache(lecture_id, stage_name, transcript_hash);
+        CREATE INDEX IF NOT EXISTS idx_llm_stage_cache_lecture
+            ON llm_stage_cache(lecture_id);
         "#,
     )?;
 

@@ -1,5 +1,10 @@
-use crate::db::{queries::get_pipeline_stages, queries::PipelineStageRecord, AppDatabase};
-use crate::pipeline::orchestrator::run_full_pipeline;
+use crate::db::{
+    queries::count_llm_stage_cache, queries::get_pipeline_stages, queries::PipelineStageRecord,
+    AppDatabase,
+};
+use crate::pipeline::orchestrator::{run_full_pipeline_with_options, PipelineRunOptions};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use tauri::{AppHandle, Manager};
 
 /// Start the full processing pipeline for a lecture.
@@ -7,7 +12,66 @@ use tauri::{AppHandle, Manager};
 /// This command returns immediately — the pipeline runs in a background tokio task
 /// and communicates progress via `pipeline-stage` Tauri events.
 #[tauri::command]
-pub async fn start_pipeline(app: AppHandle, lecture_id: String) -> Result<(), String> {
+pub async fn start_pipeline(
+    app: AppHandle,
+    lecture_id: String,
+    use_cache: Option<bool>,
+) -> Result<(), String> {
+    start_pipeline_impl(app, lecture_id, use_cache).await
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct PipelineEstimate {
+    pub lecture_id: String,
+    pub transcript_words: usize,
+    pub token_estimate: usize,
+    pub estimated_minutes_min: u32,
+    pub estimated_minutes_max: u32,
+    pub has_cached_results: bool,
+    pub cached_stage_count: i64,
+    pub is_long_transcript: bool,
+}
+
+#[tauri::command]
+pub async fn estimate_pipeline_work(
+    app: AppHandle,
+    lecture_id: String,
+) -> Result<PipelineEstimate, String> {
+    let db = app
+        .try_state::<AppDatabase>()
+        .ok_or_else(|| "Database not initialised".to_string())?;
+    let conn = db.connect().map_err(|e| e.to_string())?;
+
+    let transcript = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+
+    let transcript_words = transcript.full_text.split_whitespace().count();
+    let token_estimate = ((transcript.full_text.chars().count() as f64) / 4.0).ceil() as usize;
+    let estimated_minutes_min = ((token_estimate as f64) / 3200.0).ceil().max(1.0) as u32;
+    let estimated_minutes_max = ((token_estimate as f64) / 1300.0).ceil().max(2.0) as u32;
+
+    let transcript_hash = transcript_hash(&transcript.full_text);
+    let cached_stage_count = count_llm_stage_cache(&conn, &lecture_id, &transcript_hash)
+        .map_err(|e| e.to_string())?;
+
+    Ok(PipelineEstimate {
+        lecture_id,
+        transcript_words,
+        token_estimate,
+        estimated_minutes_min,
+        estimated_minutes_max,
+        has_cached_results: cached_stage_count > 0,
+        cached_stage_count,
+        is_long_transcript: transcript_words > 10_000,
+    })
+}
+
+async fn start_pipeline_impl(
+    app: AppHandle,
+    lecture_id: String,
+    use_cache: Option<bool>,
+) -> Result<(), String> {
     // Verify the database is available before spawning
     let _db = app
         .try_state::<AppDatabase>()
@@ -15,13 +79,22 @@ pub async fn start_pipeline(app: AppHandle, lecture_id: String) -> Result<(), St
 
     let app_clone = app.clone();
     let lecture_id_clone = lecture_id.clone();
+    let options = PipelineRunOptions {
+        use_cache: use_cache.unwrap_or(true),
+    };
 
     // Spawn as a detached background task so the command returns immediately
     tokio::spawn(async move {
-        run_full_pipeline(lecture_id_clone, app_clone).await;
+        run_full_pipeline_with_options(lecture_id_clone, app_clone, options).await;
     });
 
     Ok(())
+}
+
+fn transcript_hash(transcript: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    transcript.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 /// Return the current pipeline stage statuses for a lecture.

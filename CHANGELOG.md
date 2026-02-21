@@ -2,6 +2,38 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 8.1] - 2026-02-21
+- Added: Long-audio Whisper transcription mode for files over 30 minutes using 5-minute chunks with 10-second overlap, with chunk-aware deduped segment stitching.
+- Added: Granular `transcription-progress` payload fields (`chunk_index`, `chunk_total`, `chunk_percent`, `eta_seconds`, `realtime_factor`) and Upload queue UI display for per-chunk progress + ETA.
+- Added: LLM transcript-hash cache table (`llm_stage_cache`) with DB query helpers and cache-aware pipeline execution to prevent redundant stage generation.
+- Added: Pipeline estimate command (`estimate_pipeline_work`) returning token estimate, projected duration range, and cache availability before processing.
+- Added: Long-transcript section strategy (>10,000 words) for notes/quiz generation with per-section events (`notes_section_*`, `quiz_section_*`) and merged final JSON outputs.
+- Added: Storage usage command (`get_storage_usage`) and Settings UI panel showing app-data usage, audio usage, prepared-audio usage, and free disk space.
+- Added: Settings toggle `delete_audio_after_processing`, with backend cleanup of original/prepared audio on successful pipeline completion.
+- Added: Route-level lazy loading (`React.lazy` + `Suspense`) to reduce initial bundle execution cost.
+- Added: Virtualized flashcard index list (react-window `List`) for very large decks to keep flashcard navigation responsive at scale.
+- Changed: Library re-process and Upload batch processing flows now ask whether to use cached results or regenerate after showing token/time estimates.
+- Changed: Added SQLite indexes for commonly queried columns to improve lecture/pipeline/query performance.
+- Files modified:
+  - src-tauri/src/commands/pipeline.rs
+  - src-tauri/src/commands/settings.rs
+  - src-tauri/src/commands/transcribe.rs
+  - src-tauri/src/db/queries.rs
+  - src-tauri/src/db/schema.rs
+  - src-tauri/src/lib.rs
+  - src-tauri/src/pipeline/orchestrator.rs
+  - src/App.tsx
+  - src/components/Flashcards/FlashcardViewer.tsx
+  - src/components/Library/LectureLibrary.tsx
+  - src/components/Pipeline/ProgressTracker.tsx
+  - src/components/Settings/SettingsPanel.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/lib/tauriApi.ts
+  - src/lib/types.ts
+  - package.json
+  - bun.lock
+  - CHANGELOG.md
+
 ## [Task 7.2] - 2026-02-21
 - Added: Batch upload workflow on Upload page with multi-file import, queue display, remove-before-start controls, and sequential `Process All` execution (`waiting` -> `processing` -> `complete` / `error`)
 - Added: Frontend queue orchestration that transcribes each lecture and waits for pipeline completion events before starting the next item

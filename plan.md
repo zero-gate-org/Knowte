@@ -1344,7 +1344,103 @@ Memory management:
 
 ---
 
-### Task 8.2 — Build + Distribution
+### Task 8.2 — Video Upload + Audio Extraction
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add support for uploading video files and processing them through the same
+audio-first pipeline used for lectures.
+
+FRONTEND:
+- Update Upload flow to accept video file types:
+  - .mp4, .mov, .mkv, .webm, .avi, .m4v
+- Show explicit processing stages in queue for video sources:
+  - "uploading" -> "extracting audio" -> "transcribing" -> "processing"
+- Display source type badge (Audio / Video) in queue + Library item details.
+- Reuse existing queue + Process All behavior.
+
+BACKEND:
+- Extend file intake command(s) to accept video paths.
+- If file is video:
+  - Use ffmpeg to extract audio to app data lectures directory.
+  - Normalize to supported pipeline format (16kHz mono WAV preferred).
+  - Preserve lecture duration metadata from extracted audio.
+- Persist extracted audio path as the lecture's canonical audio source.
+- Return user-friendly errors if extraction fails (codec unsupported, ffmpeg missing, etc.).
+
+PIPELINE INTEGRATION:
+- Once extraction finishes, run normal transcript + LLM pipeline unchanged.
+- Keep all downstream features (notes/quiz/mindmap/flashcards/export) identical.
+- Add cleanup handling for temporary extraction artifacts.
+
+UX + RELIABILITY:
+- Show conversion failure message with actionable next step.
+- Ensure large video uploads do not freeze UI thread.
+- Keep behavior consistent in batch mode with mixed audio/video files.
+```
+
+**Acceptance Criteria:**
+- [ ] User can upload common video formats from Upload page
+- [ ] Video is converted to audio successfully before transcription
+- [ ] Converted audio enters existing transcription + pipeline flow
+- [ ] Queue supports mixed audio/video items with correct statuses
+- [ ] Clear errors shown when ffmpeg/conversion fails
+
+---
+
+### Task 8.3 — YouTube URL Import + Audio Download
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add a "YouTube Import" workflow that downloads lecture audio from a YouTube URL
+using yt-dlp + ffmpeg, then runs the standard Cognote processing pipeline.
+
+FRONTEND:
+- Add "Import from YouTube" section on Upload page:
+  - URL input field
+  - Validate URL format before submit
+  - "Add to Queue" button
+- Show progress states:
+  - "validating URL" -> "downloading" -> "extracting audio" -> "transcribing" -> "processing"
+- Allow URL imports to coexist with file uploads in the same queue.
+
+BACKEND:
+- Add Tauri command `import_youtube_audio(url: String)`:
+  - Run `yt-dlp` to fetch best audio stream for the URL
+  - Use ffmpeg post-processing to extract/normalize audio
+  - Save result in app data lectures directory
+  - Create lecture DB record and return metadata
+- Emit progress events for download/extraction where possible.
+- Detect and handle:
+  - yt-dlp not installed
+  - ffmpeg not installed
+  - invalid/unreachable/private video
+  - blocked/age-restricted content
+
+PIPELINE INTEGRATION:
+- Imported YouTube lectures should behave exactly like uploaded lectures:
+  - transcript editing
+  - notes, quiz, flashcards, mind map
+  - exports and lecture library management
+
+SECURITY + SAFETY:
+- Sanitize filenames from video titles.
+- Store only required metadata + downloaded audio locally.
+- Reject non-YouTube URLs (or unsupported domains) with clear error.
+```
+
+**Acceptance Criteria:**
+- [ ] User can paste valid YouTube URL and add it to queue
+- [ ] Audio downloads via yt-dlp and extracts via ffmpeg successfully
+- [ ] Downloaded item completes normal transcription + LLM pipeline
+- [ ] Progress and error states are visible and understandable
+- [ ] Missing-tool scenarios (yt-dlp/ffmpeg) are handled gracefully
+
+---
+
+### Task 8.4 — Build + Distribution
 
 ```
 PROMPT FOR AGENT:
@@ -1433,18 +1529,3 @@ chrono = "0.4"
 
 ---
 
-## Critical Path
-
-```
-Phase 1 (Shell)           ████░░░░░░░░░░░░░░░░  ~3 sessions
-Phase 2 (Transcription)   ████████░░░░░░░░░░░░  ~4 sessions  
-Phase 3 (LLM Pipeline)    ████████████░░░░░░░░  ~5 sessions  ← INTEGRATION TEST
-Phase 4 (Output Views)    ████████████████░░░░  ~5 sessions
-Phase 5 (Library)         ██████████████████░░  ~2 sessions
-Phase 6 (Polish)          ████████████████████  ~3 sessions
-Phase 7 (Advanced)        ████████████████████  ~3 sessions  ← OPTIONAL
-Phase 8 (Distribution)    ████████████████████  ~2 sessions
-                                          Total: ~27 sessions
-```
-
-Each "session" is one focused AI agent task. Run acceptance tests between every session. The app is fully usable after Phase 5. Phases 7-8 are enhancements.

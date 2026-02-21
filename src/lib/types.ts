@@ -10,6 +10,7 @@ export interface Settings {
   export_path: string;
   enable_research: boolean;
   theme: ThemeMode;
+  delete_audio_after_processing: boolean;
 }
 
 export interface OllamaStatus {
@@ -40,6 +41,11 @@ export interface TranscriptSegment {
 export interface TranscriptionProgress {
   lecture_id: string;
   percent: number;
+  chunk_index?: number;
+  chunk_total?: number;
+  chunk_percent?: number;
+  eta_seconds?: number | null;
+  realtime_factor?: number | null;
 }
 
 export interface TranscriptionResult {
@@ -203,6 +209,25 @@ export interface PipelineStageRecord {
   completed_at?: string;
 }
 
+export interface StorageUsage {
+  app_data_dir: string;
+  app_data_bytes: number;
+  lectures_bytes: number;
+  prepared_audio_bytes: number;
+  free_bytes: number;
+}
+
+export interface PipelineEstimate {
+  lecture_id: string;
+  transcript_words: number;
+  token_estimate: number;
+  estimated_minutes_min: number;
+  estimated_minutes_max: number;
+  has_cached_results: boolean;
+  cached_stage_count: number;
+  is_long_transcript: boolean;
+}
+
 export type LectureStatus =
   | "uploaded"
   | "transcribing"
@@ -271,4 +296,5 @@ export const DEFAULT_SETTINGS: Settings = {
   export_path: "",
   enable_research: true,
   theme: "dark",
+  delete_audio_after_processing: false,
 };

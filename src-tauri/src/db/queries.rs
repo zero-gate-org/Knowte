@@ -513,6 +513,74 @@ pub fn get_pipeline_stages(
     rows.collect()
 }
 
+// ─── LLM Stage Cache Queries ────────────────────────────────────────────────
+
+pub fn upsert_llm_stage_cache(
+    connection: &Connection,
+    lecture_id: &str,
+    stage_name: &str,
+    transcript_hash: &str,
+    result_text: &str,
+) -> rusqlite::Result<()> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    connection.execute(
+        r#"
+        INSERT INTO llm_stage_cache
+            (id, lecture_id, stage_name, transcript_hash, result_text, created_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(lecture_id, stage_name, transcript_hash) DO UPDATE SET
+            id = excluded.id,
+            result_text = excluded.result_text,
+            created_at = excluded.created_at
+        "#,
+        params![id, lecture_id, stage_name, transcript_hash, result_text, now],
+    )?;
+    Ok(())
+}
+
+pub fn get_llm_stage_cache(
+    connection: &Connection,
+    lecture_id: &str,
+    stage_name: &str,
+    transcript_hash: &str,
+) -> rusqlite::Result<Option<String>> {
+    let result = connection.query_row(
+        r#"
+        SELECT result_text
+        FROM llm_stage_cache
+        WHERE lecture_id = ?1
+          AND stage_name = ?2
+          AND transcript_hash = ?3
+        "#,
+        params![lecture_id, stage_name, transcript_hash],
+        |row| row.get::<_, String>(0),
+    );
+
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+pub fn count_llm_stage_cache(
+    connection: &Connection,
+    lecture_id: &str,
+    transcript_hash: &str,
+) -> rusqlite::Result<i64> {
+    connection.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM llm_stage_cache
+        WHERE lecture_id = ?1
+          AND transcript_hash = ?2
+        "#,
+        params![lecture_id, transcript_hash],
+        |row| row.get(0),
+    )
+}
+
 // ─── Notes Queries ────────────────────────────────────────────────────────────
 
 pub fn upsert_notes(
