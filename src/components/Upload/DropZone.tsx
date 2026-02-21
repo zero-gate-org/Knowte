@@ -1,21 +1,48 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
-import { SUPPORTED_AUDIO_EXTENSIONS } from "../../lib/constants";
+import {
+  SUPPORTED_MEDIA_EXTENSIONS,
+  SUPPORTED_VIDEO_EXTENSIONS,
+} from "../../lib/constants";
 import { acceptAudioFile, pickAudioFiles } from "../../lib/tauriApi";
-import type { AudioFileMetadata } from "../../lib/types";
+import type { AudioFileMetadata, LectureSourceType } from "../../lib/types";
+
+export interface UploadStageUpdate {
+  key: string;
+  filePath: string;
+  filename: string;
+  sourceType: LectureSourceType;
+  stage: "uploading" | "extracting_audio" | "ready" | "error";
+  metadata?: AudioFileMetadata;
+  error?: string;
+}
 
 interface DropZoneProps {
   onUploadSuccess: (metadata: AudioFileMetadata[]) => void;
+  onUploadStageChange?: (update: UploadStageUpdate) => void;
   onUploadStateChange?: (isUploading: boolean) => void;
   disabled?: boolean;
 }
 
 const formatError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const VIDEO_EXTENSION_SET = new Set<string>(SUPPORTED_VIDEO_EXTENSIONS);
+
+function getFilename(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] ?? path;
+}
+
+function getSourceType(path: string): LectureSourceType {
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  return VIDEO_EXTENSION_SET.has(extension) ? "video" : "audio";
+}
 
 export default function DropZone({
   onUploadSuccess,
+  onUploadStageChange,
   onUploadStateChange,
   disabled = false,
 }: DropZoneProps) {
@@ -41,11 +68,50 @@ export default function DropZone({
     try {
       for (let index = 0; index < uniquePaths.length; index += 1) {
         const path = uniquePaths[index];
+        const filename = getFilename(path);
+        const sourceType = getSourceType(path);
+        const key = `path:${path}`;
+
+        onUploadStageChange?.({
+          key,
+          filePath: path,
+          filename,
+          sourceType,
+          stage: "uploading",
+        });
+
         try {
+          if (sourceType === "video") {
+            onUploadStageChange?.({
+              key,
+              filePath: path,
+              filename,
+              sourceType,
+              stage: "extracting_audio",
+            });
+          }
+
           const metadata = await acceptAudioFile(path);
           imported.push(metadata);
+          onUploadStageChange?.({
+            key,
+            filePath: path,
+            filename: metadata.filename,
+            sourceType: metadata.source_type,
+            stage: "ready",
+            metadata,
+          });
         } catch (uploadError) {
-          failures.push(formatError(uploadError));
+          const message = formatError(uploadError);
+          failures.push(message);
+          onUploadStageChange?.({
+            key,
+            filePath: path,
+            filename,
+            sourceType,
+            stage: "error",
+            error: message,
+          });
         } finally {
           setUploadProgress(Math.round(((index + 1) / uniquePaths.length) * 100));
         }
@@ -148,7 +214,7 @@ export default function DropZone({
           Drag and drop lecture files
         </h3>
         <p className="mt-2 text-sm text-slate-400">
-          Supported: {SUPPORTED_AUDIO_EXTENSIONS.join(", ")}
+          Supported: {SUPPORTED_MEDIA_EXTENSIONS.map((ext) => `.${ext}`).join(", ")}
         </p>
         <button
           type="button"

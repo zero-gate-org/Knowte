@@ -2,6 +2,47 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 8.4] - 2026-02-21
+- Added: Bundled ffmpeg runtime resolution utility that prefers app-bundled binaries from Tauri resources and falls back to system `PATH`.
+- Added: Startup ffmpeg provisioning step (`setup`) that installs ffmpeg into app-data (`tools/ffmpeg`) before opening the app UI.
+- Added: Tauri bundle resource configuration for platform-specific ffmpeg directories (`linux`, `macos`, `windows`) so release builds can ship ffmpeg with the app.
+- Added: Shared ffmpeg execution path in both video extraction intake and transcription pre-conversion flows to keep behavior consistent across processing paths.
+- Added: Resource scaffold + documentation for where platform ffmpeg binaries must be placed before release bundling.
+- Changed: Video conversion missing-tool error now points users to reinstalling Cognote (bundled ffmpeg) or installing ffmpeg manually.
+- Files modified:
+  - src-tauri/src/utils/ffmpeg.rs (new)
+  - src-tauri/src/utils/mod.rs
+  - src-tauri/src/commands/audio.rs
+  - src-tauri/src/commands/transcribe.rs
+  - src-tauri/tauri.conf.json
+  - src-tauri/resources/ffmpeg/README.md (new)
+  - src-tauri/resources/ffmpeg/linux/.gitkeep (new)
+  - src-tauri/resources/ffmpeg/macos/.gitkeep (new)
+  - src-tauri/resources/ffmpeg/windows/.gitkeep (new)
+  - CHANGELOG.md
+
+## [Task 8.2] - 2026-02-21
+- Added: Video upload support in media intake for `.mp4`, `.mov`, `.mkv`, `.webm`, `.avi`, and `.m4v`, alongside existing audio formats.
+- Added: Backend video-to-audio extraction via `ffmpeg` into canonical 16kHz mono WAV lecture assets, with `source_type` persisted as lecture metadata.
+- Added: User-facing conversion error handling for missing `ffmpeg`, unsupported codecs/containers, and no-audio-track video files.
+- Added: Temporary extraction artifact cleanup during video conversion failures.
+- Added: Upload queue stage tracking for mixed media sources, including explicit video stages (`uploading` -> `extracting audio` -> `transcribing` -> `processing`).
+- Added: Source type badges (`Audio`/`Video`) in Upload queue rows and Library lecture cards.
+- Changed: `accept_audio_file` now runs in a background worker to keep large video imports off the UI thread (Task 8.1 video-performance alignment).
+- Changed: Shared frontend lecture/media types now include source metadata to keep Upload, Library, and app state consistent.
+- Files modified:
+  - src-tauri/src/commands/audio.rs
+  - src-tauri/src/commands/library.rs
+  - src-tauri/src/db/queries.rs
+  - src-tauri/src/db/schema.rs
+  - src/App.tsx
+  - src/components/Library/LectureLibrary.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/Upload/DropZone.tsx
+  - src/lib/constants.ts
+  - src/lib/types.ts
+  - CHANGELOG.md
+
 ## [Task 8.1] - 2026-02-21
 - Added: Long-audio Whisper transcription mode for files over 30 minutes using 5-minute chunks with 10-second overlap, with chunk-aware deduped segment stitching.
 - Added: Granular `transcription-progress` payload fields (`chunk_index`, `chunk_total`, `chunk_percent`, `eta_seconds`, `realtime_factor`) and Upload queue UI display for per-chunk progress + ETA.

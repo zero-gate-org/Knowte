@@ -8,7 +8,12 @@ import {
   searchLectures,
   startPipelineWithOptions,
 } from "../../lib/tauriApi";
-import type { Lecture, LectureStatus, LectureSummary } from "../../lib/types";
+import type {
+  Lecture,
+  LectureSourceType,
+  LectureStatus,
+  LectureSummary,
+} from "../../lib/types";
 import { useLectureStore, useSettingsStore } from "../../stores";
 import { ViewHeader } from "../Layout";
 import EmptyState from "./EmptyState";
@@ -25,6 +30,7 @@ function summaryToLecture(summary: LectureSummary): Lecture {
     title: summary.title,
     filename: summary.filename,
     audioPath: summary.audio_path,
+    sourceType: summary.source_type,
     duration: summary.duration,
     status: summary.status,
     createdAt: summary.created_at,
@@ -73,6 +79,18 @@ function statusMatchesFilter(status: LectureStatus, filter: StatusFilter): boole
   if (filter === "complete") return status === "complete";
   if (filter === "error") return status === "error";
   return PROCESSING_STATUSES.includes(status);
+}
+
+function sourceBadgeClass(sourceType: LectureSourceType): string {
+  if (sourceType === "video") {
+    return "border-violet-500/40 bg-violet-500/15 text-violet-200";
+  }
+
+  return "border-cyan-500/40 bg-cyan-500/15 text-cyan-200";
+}
+
+function sourceLabel(sourceType: LectureSourceType): string {
+  return sourceType === "video" ? "Video" : "Audio";
 }
 
 function processingPercent(lecture: LectureSummary): number | null {
@@ -356,10 +374,15 @@ export default function LectureLibrary() {
                 >
                   <p className="truncate text-base font-semibold text-slate-100">{lecture.title}</p>
                   <p className="mt-1 truncate text-xs text-slate-400">{lecture.filename}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span>{formatDate(lecture.created_at)}</span>
                     <span>•</span>
                     <span>{formatDuration(lecture.duration)}</span>
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${sourceBadgeClass(lecture.source_type)}`}
+                    >
+                      {sourceLabel(lecture.source_type)}
+                    </span>
                   </div>
                   <div className="mt-3">
                     <span

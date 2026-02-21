@@ -39,6 +39,7 @@ function summaryToLecture(summary: LectureSummary): Lecture {
     title: summary.title,
     filename: summary.filename,
     audioPath: summary.audio_path,
+    sourceType: summary.source_type,
     duration: summary.duration,
     status: summary.status,
     createdAt: summary.created_at,

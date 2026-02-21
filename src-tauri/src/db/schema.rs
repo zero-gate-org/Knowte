@@ -7,6 +7,7 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
             id TEXT PRIMARY KEY,
             filename TEXT NOT NULL,
             audio_path TEXT NOT NULL,
+            source_type TEXT NOT NULL DEFAULT 'audio',
             duration REAL NOT NULL,
             status TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -122,6 +123,12 @@ pub fn run_migrations(connection: &Connection) -> rusqlite::Result<()> {
     // Backfill additive columns for users with databases created before newer schema versions.
     ensure_column_exists(connection, "lectures", "summary", "TEXT")?;
     ensure_column_exists(connection, "lectures", "keywords_json", "TEXT")?;
+    ensure_column_exists(
+        connection,
+        "lectures",
+        "source_type",
+        "TEXT NOT NULL DEFAULT 'audio'",
+    )?;
 
     Ok(())
 }

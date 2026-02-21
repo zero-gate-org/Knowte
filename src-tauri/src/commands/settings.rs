@@ -1,9 +1,9 @@
+use fs2::available_space;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
-use fs2::available_space;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -196,8 +196,8 @@ pub fn get_storage_usage(app: AppHandle) -> Result<StorageUsage, String> {
     let app_data_bytes = directory_size(&app_data_dir)?;
     let lectures_bytes = directory_size(&lectures_dir)?;
     let prepared_audio_bytes = directory_size(&prepared_audio_dir)?;
-    let free_bytes =
-        available_space(&app_data_dir).map_err(|_| "Unable to read free disk space.".to_string())?;
+    let free_bytes = available_space(&app_data_dir)
+        .map_err(|_| "Unable to read free disk space.".to_string())?;
 
     Ok(StorageUsage {
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
@@ -214,7 +214,8 @@ fn directory_size(path: &std::path::Path) -> Result<u64, String> {
     }
 
     if path.is_file() {
-        let metadata = fs::metadata(path).map_err(|_| "Unable to read file metadata.".to_string())?;
+        let metadata =
+            fs::metadata(path).map_err(|_| "Unable to read file metadata.".to_string())?;
         return Ok(metadata.len());
     }
 

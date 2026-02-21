@@ -4,6 +4,7 @@ use crate::db::queries::{
     update_transcript_content, upsert_transcript, TranscriptRecord,
 };
 use crate::db::AppDatabase;
+use crate::utils::ffmpeg::resolve_ffmpeg_path;
 use chrono::Utc;
 use futures_util::StreamExt;
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
@@ -11,7 +12,6 @@ use rubato::{FftFixedInOut, Resampler};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Instant;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
@@ -478,7 +478,8 @@ fn transcribe_audio_impl(
         let mut segments: Vec<TranscriptSegment> = Vec::new();
         if total_audio_seconds > LONG_AUDIO_THRESHOLD_SECONDS {
             let chunk_samples = (TRANSCRIPTION_CHUNK_SECONDS * TARGET_SAMPLE_RATE as f64) as usize;
-            let overlap_samples = (TRANSCRIPTION_OVERLAP_SECONDS * TARGET_SAMPLE_RATE as f64) as usize;
+            let overlap_samples =
+                (TRANSCRIPTION_OVERLAP_SECONDS * TARGET_SAMPLE_RATE as f64) as usize;
 
             let mut windows: Vec<(usize, usize, usize, usize)> = Vec::new();
             let mut chunk_start_unique = 0usize;
@@ -493,16 +494,19 @@ fn transcribe_audio_impl(
             let chunk_total = windows.len() as u32;
             let mut last_segment_end = 0.0_f64;
 
-            for (index, (read_start, read_end, unique_start, unique_end)) in windows.iter().enumerate()
+            for (index, (read_start, read_end, unique_start, unique_end)) in
+                windows.iter().enumerate()
             {
-                let whisper_input = read_wav_samples_range(&prepared_audio_path, *read_start, *read_end)?;
+                let whisper_input =
+                    read_wav_samples_range(&prepared_audio_path, *read_start, *read_end)?;
                 let chunk_context = ChunkProgressContext {
                     chunk_index: (index + 1) as u32,
                     chunk_total,
                     chunk_offset_seconds: *read_start as f64 / TARGET_SAMPLE_RATE as f64,
                     chunk_unique_seconds: (*unique_end - *unique_start) as f64
                         / TARGET_SAMPLE_RATE as f64,
-                    processed_unique_seconds_before: *unique_start as f64 / TARGET_SAMPLE_RATE as f64,
+                    processed_unique_seconds_before: *unique_start as f64
+                        / TARGET_SAMPLE_RATE as f64,
                     total_audio_seconds,
                 };
                 let chunk_segments = run_whisper_transcription(
@@ -565,8 +569,8 @@ fn transcribe_audio_impl(
             return Err(TranscribeError::EmptyTranscript);
         }
 
-        let segments_json = serde_json::to_string(&segments)
-            .map_err(|_| TranscribeError::TranscriptSaveFailed)?;
+        let segments_json =
+            serde_json::to_string(&segments).map_err(|_| TranscribeError::TranscriptSaveFailed)?;
         let transcript_record = TranscriptRecord {
             id: Uuid::new_v4().to_string(),
             lecture_id: lecture_id.clone(),
@@ -727,7 +731,7 @@ fn prepare_audio_for_whisper(
     fs::create_dir_all(&prepared_dir).map_err(|_| TranscribeError::AudioPreparationFailed)?;
     let prepared_path = prepared_dir.join(format!("{lecture_id}-16khz-mono.wav"));
 
-    if convert_audio_with_ffmpeg(source_path, &prepared_path) {
+    if convert_audio_with_ffmpeg(app, source_path, &prepared_path) {
         return Ok(prepared_path);
     }
 
@@ -735,8 +739,9 @@ fn prepare_audio_for_whisper(
     Ok(prepared_path)
 }
 
-fn convert_audio_with_ffmpeg(source_path: &Path, target_path: &Path) -> bool {
-    let status = Command::new("ffmpeg")
+fn convert_audio_with_ffmpeg(app: &AppHandle, source_path: &Path, target_path: &Path) -> bool {
+    let ffmpeg_path = resolve_ffmpeg_path(Some(app));
+    let status = std::process::Command::new(ffmpeg_path)
         .arg("-y")
         .arg("-i")
         .arg(source_path.as_os_str())

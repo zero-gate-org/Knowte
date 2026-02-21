@@ -7,6 +7,7 @@ pub struct LectureRecord {
     pub id: String,
     pub filename: String,
     pub audio_path: String,
+    pub source_type: String,
     pub duration: f64,
     pub status: String,
     pub created_at: String,
@@ -40,6 +41,7 @@ pub struct LectureSummaryRecord {
     pub title: String,
     pub filename: String,
     pub audio_path: String,
+    pub source_type: String,
     pub duration: f64,
     pub status: String,
     pub created_at: String,
@@ -134,11 +136,12 @@ pub fn rebuild_lecture_search_index(connection: &Connection) -> rusqlite::Result
 pub fn upsert_lecture(connection: &Connection, lecture: &LectureRecord) -> rusqlite::Result<()> {
     connection.execute(
         r#"
-        INSERT INTO lectures (id, filename, audio_path, duration, status, created_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        INSERT INTO lectures (id, filename, audio_path, source_type, duration, status, created_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ON CONFLICT(id) DO UPDATE SET
             filename = excluded.filename,
             audio_path = excluded.audio_path,
+            source_type = excluded.source_type,
             duration = excluded.duration,
             status = excluded.status,
             created_at = excluded.created_at
@@ -147,6 +150,7 @@ pub fn upsert_lecture(connection: &Connection, lecture: &LectureRecord) -> rusql
             lecture.id,
             lecture.filename,
             lecture.audio_path,
+            lecture.source_type,
             lecture.duration,
             lecture.status,
             lecture.created_at
@@ -198,7 +202,7 @@ pub fn get_lecture_by_id(
 ) -> rusqlite::Result<Option<LectureRecord>> {
     let mut statement = connection.prepare(
         r#"
-        SELECT id, filename, audio_path, duration, status, created_at
+        SELECT id, filename, audio_path, source_type, duration, status, created_at
         FROM lectures
         WHERE id = ?1
         "#,
@@ -209,9 +213,10 @@ pub fn get_lecture_by_id(
             id: row.get(0)?,
             filename: row.get(1)?,
             audio_path: row.get(2)?,
-            duration: row.get(3)?,
-            status: row.get(4)?,
-            created_at: row.get(5)?,
+            source_type: row.get(3)?,
+            duration: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
         })
     });
 
@@ -229,6 +234,7 @@ pub fn list_lectures(connection: &Connection) -> rusqlite::Result<Vec<LectureSum
             l.id,
             l.filename,
             l.audio_path,
+            l.source_type,
             l.duration,
             l.status,
             l.created_at,
@@ -248,18 +254,19 @@ pub fn list_lectures(connection: &Connection) -> rusqlite::Result<Vec<LectureSum
 
     let rows = statement.query_map([], |row| {
         let filename: String = row.get(1)?;
-        let notes_json: Option<String> = row.get(7)?;
+        let notes_json: Option<String> = row.get(8)?;
 
         Ok(LectureSummaryRecord {
             id: row.get(0)?,
             title: title_from_notes(notes_json.as_deref(), &filename),
             filename,
             audio_path: row.get(2)?,
-            duration: row.get(3)?,
-            status: row.get(4)?,
-            created_at: row.get(5)?,
-            summary: row.get(6)?,
-            stages_complete: row.get(8)?,
+            source_type: row.get(3)?,
+            duration: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
+            summary: row.get(7)?,
+            stages_complete: row.get(9)?,
         })
     })?;
 
@@ -284,6 +291,7 @@ pub fn search_lectures(
             l.id,
             l.filename,
             l.audio_path,
+            l.source_type,
             l.duration,
             l.status,
             l.created_at,
@@ -316,18 +324,19 @@ pub fn search_lectures(
 
     let rows = statement.query_map(params![trimmed, fts_query], |row| {
         let filename: String = row.get(1)?;
-        let notes_json: Option<String> = row.get(7)?;
+        let notes_json: Option<String> = row.get(8)?;
 
         Ok(LectureSummaryRecord {
             id: row.get(0)?,
             title: title_from_notes(notes_json.as_deref(), &filename),
             filename,
             audio_path: row.get(2)?,
-            duration: row.get(3)?,
-            status: row.get(4)?,
-            created_at: row.get(5)?,
-            summary: row.get(6)?,
-            stages_complete: row.get(8)?,
+            source_type: row.get(3)?,
+            duration: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
+            summary: row.get(7)?,
+            stages_complete: row.get(9)?,
         })
     })?;
 
@@ -534,7 +543,14 @@ pub fn upsert_llm_stage_cache(
             result_text = excluded.result_text,
             created_at = excluded.created_at
         "#,
-        params![id, lecture_id, stage_name, transcript_hash, result_text, now],
+        params![
+            id,
+            lecture_id,
+            stage_name,
+            transcript_hash,
+            result_text,
+            now
+        ],
     )?;
     Ok(())
 }

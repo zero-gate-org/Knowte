@@ -19,12 +19,15 @@ export interface OllamaStatus {
   error: string | null;
 }
 
+export type LectureSourceType = "audio" | "video";
+
 export interface AudioFileMetadata {
   id: string;
   filename: string;
   path: string;
   duration_seconds: number;
   size_bytes: number;
+  source_type: LectureSourceType;
 }
 
 export interface WhisperDownloadProgress {
@@ -243,6 +246,7 @@ export interface LectureSummary {
   status: LectureStatus;
   created_at: string;
   audio_path: string;
+  source_type: LectureSourceType;
   summary?: string;
   stages_complete: number;
 }
@@ -252,6 +256,7 @@ export interface Lecture {
   title?: string;
   filename: string;
   audioPath: string;
+  sourceType: LectureSourceType;
   duration: number;
   status: LectureStatus;
   transcriptId?: string;

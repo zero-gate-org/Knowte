@@ -198,7 +198,8 @@ fn merge_notes_sections(section_jsons: &[String]) -> Result<String, String> {
             }
         }
 
-        if let Some(section_takeaways) = value.get("takeaways").and_then(serde_json::Value::as_array)
+        if let Some(section_takeaways) =
+            value.get("takeaways").and_then(serde_json::Value::as_array)
         {
             for takeaway in section_takeaways {
                 let text = takeaway.as_str().unwrap_or_default().trim();
@@ -234,7 +235,8 @@ fn merge_quiz_sections(section_jsons: &[String]) -> Result<String, String> {
     for section in section_jsons {
         let value: serde_json::Value =
             serde_json::from_str(section).map_err(|_| "Unable to parse quiz section JSON.")?;
-        if let Some(section_questions) = value.get("questions").and_then(serde_json::Value::as_array)
+        if let Some(section_questions) =
+            value.get("questions").and_then(serde_json::Value::as_array)
         {
             questions.extend(section_questions.iter().cloned());
         }
@@ -776,7 +778,8 @@ pub async fn run_full_pipeline_with_options(
                     total,
                     section
                 );
-                let section_prompt = prompt_templates::structured_notes_prompt(&section_context, &level);
+                let section_prompt =
+                    prompt_templates::structured_notes_prompt(&section_context, &level);
                 let section_json = match run_stage(
                     &client,
                     &app,

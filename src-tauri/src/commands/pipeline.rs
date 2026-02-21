@@ -52,8 +52,8 @@ pub async fn estimate_pipeline_work(
     let estimated_minutes_max = ((token_estimate as f64) / 1300.0).ceil().max(2.0) as u32;
 
     let transcript_hash = transcript_hash(&transcript.full_text);
-    let cached_stage_count = count_llm_stage_cache(&conn, &lecture_id, &transcript_hash)
-        .map_err(|e| e.to_string())?;
+    let cached_stage_count =
+        count_llm_stage_cache(&conn, &lecture_id, &transcript_hash).map_err(|e| e.to_string())?;
 
     Ok(PipelineEstimate {
         lecture_id,

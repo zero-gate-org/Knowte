@@ -20,6 +20,7 @@ pub struct LectureSummary {
     pub status: String,
     pub created_at: String,
     pub audio_path: String,
+    pub source_type: String,
     pub summary: Option<String>,
     pub stages_complete: i64,
 }
@@ -34,6 +35,7 @@ impl From<LectureSummaryRecord> for LectureSummary {
             status: record.status,
             created_at: record.created_at,
             audio_path: record.audio_path,
+            source_type: record.source_type,
             summary: record.summary,
             stages_complete: record.stages_complete,
         }

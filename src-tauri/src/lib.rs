@@ -28,6 +28,7 @@ use commands::transcribe::{
     transcribe_audio, update_transcript_segment,
 };
 use db::init_database;
+use utils::ffmpeg::ensure_ffmpeg_installed;
 
 #[tauri::command]
 fn get_audio_server_port(state: tauri::State<'_, AudioServerPort>) -> u16 {
@@ -39,6 +40,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            ensure_ffmpeg_installed(&app.handle()).map_err(|error| error.to_string())?;
+
             let database = init_database(&app.handle()).map_err(|error| error.to_string())?;
             app.manage(database);
 

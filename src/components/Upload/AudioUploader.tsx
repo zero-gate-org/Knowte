@@ -8,21 +8,35 @@ import {
 import type {
   AudioFileMetadata,
   Lecture,
+  LectureSourceType,
   PipelineStageEvent,
   TranscriptionProgress,
 } from "../../lib/types";
 import { useLectureStore, useToastStore } from "../../stores";
 import { ViewHeader } from "../Layout";
-import DropZone from "./DropZone";
+import DropZone, { type UploadStageUpdate } from "./DropZone";
 import LiveRecorder from "./LiveRecorder";
 
 type UploadTab = "upload" | "record";
-type QueueStatus = "waiting" | "processing" | "complete" | "error";
+type QueueStatus = "importing" | "waiting" | "processing" | "complete" | "error";
+type QueueStage =
+  | "uploading"
+  | "extracting audio"
+  | "waiting"
+  | "transcribing"
+  | "processing"
+  | "complete"
+  | "error";
 
 interface QueueItem {
-  lectureId: string;
-  metadata: AudioFileMetadata;
+  queueId: string;
+  lectureId?: string;
+  metadata?: AudioFileMetadata;
+  filename: string;
+  sourcePath: string;
+  sourceType: LectureSourceType;
   status: QueueStatus;
+  stage: QueueStage;
   error?: string;
 }
 
@@ -54,6 +68,7 @@ const toLecture = (metadata: AudioFileMetadata): Lecture => ({
   title: metadata.filename,
   filename: metadata.filename,
   audioPath: metadata.path,
+  sourceType: metadata.source_type,
   duration: metadata.duration_seconds,
   status: "uploaded",
   createdAt: new Date().toISOString(),
@@ -66,10 +81,35 @@ function statusBadgeClass(status: QueueStatus): string {
   if (status === "processing") {
     return "border-blue-500/40 bg-blue-500/15 text-blue-200";
   }
+  if (status === "importing") {
+    return "border-amber-500/40 bg-amber-500/15 text-amber-200";
+  }
   if (status === "error") {
     return "border-red-500/40 bg-red-500/15 text-red-200";
   }
   return "border-slate-500/40 bg-slate-500/15 text-slate-200";
+}
+
+function sourceBadgeClass(sourceType: LectureSourceType): string {
+  if (sourceType === "video") {
+    return "border-violet-500/40 bg-violet-500/15 text-violet-200";
+  }
+
+  return "border-cyan-500/40 bg-cyan-500/15 text-cyan-200";
+}
+
+function sourceLabel(sourceType: LectureSourceType): string {
+  return sourceType === "video" ? "Video" : "Audio";
+}
+
+function stageLabel(stage: QueueStage): string {
+  if (stage === "extracting audio") return "Extracting Audio";
+  if (stage === "transcribing") return "Transcribing";
+  if (stage === "processing") return "Processing";
+  if (stage === "uploading") return "Uploading";
+  if (stage === "waiting") return "Waiting";
+  if (stage === "complete") return "Complete";
+  return "Error";
 }
 
 export default function AudioUploader() {
@@ -98,7 +138,7 @@ export default function AudioUploader() {
   } = useLectureStore();
 
   const waitingCount = useMemo(
-    () => queueItems.filter((item) => item.status === "waiting").length,
+    () => queueItems.filter((item) => item.status === "waiting" && Boolean(item.lectureId)).length,
     [queueItems],
   );
 
@@ -189,6 +229,78 @@ export default function AudioUploader() {
     });
   }, []);
 
+  const handleUploadStageChange = useCallback((update: UploadStageUpdate) => {
+    setQueueItems((current) => {
+      const index = current.findIndex((item) => item.queueId === update.key);
+      const next = [...current];
+      const existing =
+        index >= 0
+          ? next[index]
+          : {
+              queueId: update.key,
+              filename: update.filename,
+              sourcePath: update.filePath,
+              sourceType: update.sourceType,
+              status: "importing" as QueueStatus,
+              stage: "uploading" as QueueStage,
+            };
+
+      let queueId = existing.queueId;
+      let lectureId = existing.lectureId;
+      let metadata = existing.metadata;
+      let filename = existing.filename;
+      let sourcePath = existing.sourcePath;
+      let sourceType = existing.sourceType;
+      let status = existing.status;
+      let stage = existing.stage;
+      let errorMessage = update.error;
+
+      if (update.stage === "uploading") {
+        status = "importing";
+        stage = "uploading";
+        filename = update.filename;
+        sourcePath = update.filePath;
+        sourceType = update.sourceType;
+      } else if (update.stage === "extracting_audio") {
+        status = "importing";
+        stage = "extracting audio";
+      } else if (update.stage === "ready" && update.metadata) {
+        queueId = update.metadata.id;
+        lectureId = update.metadata.id;
+        metadata = update.metadata;
+        filename = update.metadata.filename;
+        sourcePath = update.metadata.path;
+        sourceType = update.metadata.source_type;
+        status = "waiting";
+        stage = "waiting";
+        errorMessage = undefined;
+      } else if (update.stage === "error") {
+        status = "error";
+        stage = "error";
+      }
+
+      const nextItem: QueueItem = {
+        queueId,
+        lectureId,
+        metadata,
+        filename,
+        sourcePath,
+        sourceType,
+        status,
+        stage,
+        error: errorMessage,
+      };
+
+      if (index >= 0) {
+        next[index] = nextItem;
+      } else {
+        next.push(nextItem);
+      }
+
+      return next;
+    });
+  }, []);
+
   const handleAudioSuccess = (batch: AudioFileMetadata[]) => {
     if (batch.length === 0) {
       return;
@@ -204,14 +316,21 @@ export default function AudioUploader() {
     }
 
     setQueueItems((current) => {
-      const existingIds = new Set(current.map((item) => item.lectureId));
+      const existingIds = new Set(
+        current.map((item) => item.lectureId).filter((id): id is string => Boolean(id)),
+      );
       const next = [...current];
       for (const metadata of batch) {
         if (!existingIds.has(metadata.id)) {
           next.push({
+            queueId: metadata.id,
             lectureId: metadata.id,
             metadata,
+            filename: metadata.filename,
+            sourcePath: metadata.path,
+            sourceType: metadata.source_type,
             status: "waiting",
+            stage: "waiting",
           });
         }
       }
@@ -229,24 +348,26 @@ export default function AudioUploader() {
     });
   };
 
-  const removeQueueItem = (lectureId: string) => {
+  const removeQueueItem = (queueId: string) => {
     if (isBatchRunning) {
       return;
     }
 
     setQueueItems((current) =>
-      current.filter((item) => item.lectureId !== lectureId || item.status !== "waiting"),
+      current.filter((item) => item.queueId !== queueId || item.status === "processing"),
     );
   };
 
-  const updateQueueStatus = (lectureId: string, status: QueueStatus, message?: string) => {
+  const updateQueueByLecture = (
+    lectureId: string,
+    updates: Partial<Pick<QueueItem, "status" | "stage" | "error">>,
+  ) => {
     setQueueItems((current) =>
       current.map((item) =>
         item.lectureId === lectureId
           ? {
               ...item,
-              status,
-              error: message,
+              ...updates,
             }
           : item,
       ),
@@ -258,7 +379,14 @@ export default function AudioUploader() {
       return;
     }
 
-    const queueSnapshot = queueItems.filter((item) => item.status === "waiting");
+    const queueSnapshot = queueItems
+      .filter((item) => item.status === "waiting" && Boolean(item.lectureId) && Boolean(item.metadata))
+      .map((item) => ({
+        ...item,
+        lectureId: item.lectureId as string,
+        metadata: item.metadata as AudioFileMetadata,
+      }));
+
     if (queueSnapshot.length === 0) {
       return;
     }
@@ -274,7 +402,7 @@ export default function AudioUploader() {
         const filename = item.metadata.filename;
 
         setActiveQueueLectureId(lectureId);
-        updateQueueStatus(lectureId, "processing", undefined);
+        updateQueueByLecture(lectureId, { status: "processing", stage: "transcribing", error: undefined });
         setProcessHint(`Transcribing ${filename}...`);
         updateLecture(lectureId, { status: "transcribing", error: undefined });
 
@@ -289,6 +417,7 @@ export default function AudioUploader() {
             error: undefined,
           });
           setCurrentLecture(lectureId);
+          updateQueueByLecture(lectureId, { status: "processing", stage: "processing" });
 
           const estimate = await estimatePipelineWork(lectureId);
           const estimateMessage = `This lecture will process ~${estimate.token_estimate.toLocaleString()} tokens (estimated ${estimate.estimated_minutes_min}-${estimate.estimated_minutes_max} min).`;
@@ -306,12 +435,12 @@ export default function AudioUploader() {
           await waitForPipelineCompletion(lectureId);
 
           updateLecture(lectureId, { status: "complete", error: undefined });
-          updateQueueStatus(lectureId, "complete", undefined);
+          updateQueueByLecture(lectureId, { status: "complete", stage: "complete", error: undefined });
           completedCount += 1;
         } catch (processError) {
           const message = processError instanceof Error ? processError.message : String(processError);
           updateLecture(lectureId, { status: "error", error: message });
-          updateQueueStatus(lectureId, "error", message);
+          updateQueueByLecture(lectureId, { status: "error", stage: "error", error: message });
           setError(message);
           pushToast({ kind: "error", message: `${filename}: ${message}` });
         }
@@ -331,21 +460,21 @@ export default function AudioUploader() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <ViewHeader
-        title="Audio Input"
-        description="Upload multiple lecture files or record directly from your microphone."
+        title="Lecture Input"
+        description="Upload audio/video lecture files or record directly from your microphone."
       />
 
       <div
         className="inline-flex rounded-lg border border-slate-700 bg-slate-800 p-1 shadow-sm"
         role="tablist"
-        aria-label="Audio input modes"
+        aria-label="Lecture input modes"
       >
         <button
           type="button"
           id="upload-tab"
           role="tab"
           aria-selected={activeTab === "upload"}
-          aria-controls="audio-input-panel"
+          aria-controls="lecture-input-panel"
           onClick={() => setActiveTab("upload")}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "upload"
@@ -360,7 +489,7 @@ export default function AudioUploader() {
           id="record-tab"
           role="tab"
           aria-selected={activeTab === "record"}
-          aria-controls="audio-input-panel"
+          aria-controls="lecture-input-panel"
           onClick={() => setActiveTab("record")}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "record"
@@ -373,7 +502,7 @@ export default function AudioUploader() {
       </div>
 
       <section
-        id="audio-input-panel"
+        id="lecture-input-panel"
         role="tabpanel"
         aria-labelledby={activeTab === "upload" ? "upload-tab" : "record-tab"}
         className="rounded-lg border border-slate-700 bg-slate-800/70 p-4 shadow-sm"
@@ -381,6 +510,7 @@ export default function AudioUploader() {
         {activeTab === "upload" ? (
           <DropZone
             onUploadSuccess={handleAudioSuccess}
+            onUploadStageChange={handleUploadStageChange}
             onUploadStateChange={setUploading}
             disabled={isRecording || isProcessingLecture}
           />
@@ -395,7 +525,7 @@ export default function AudioUploader() {
 
       {(isUploading || isRecording) && (
         <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">
-          {isUploading ? "Importing audio files..." : "Recording in progress..."}
+          {isUploading ? "Importing lecture files..." : "Recording in progress..."}
         </div>
       )}
 
@@ -433,60 +563,83 @@ export default function AudioUploader() {
           </div>
 
           <ul className="space-y-2">
-            {queueItems.map((item) => (
-              <li
-                key={item.lectureId}
-                className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-3"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <p className="break-all text-sm font-medium text-slate-100">
-                      {item.metadata.filename}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {formatDuration(item.metadata.duration_seconds)} / {formatSize(item.metadata.size_bytes)}
-                    </p>
-                    <p className="break-all text-xs text-slate-500">{item.metadata.path}</p>
-                    {item.error && <p className="text-xs text-red-300">{item.error}</p>}
+            {queueItems.map((item) => {
+              const canRemove = !isBatchRunning && (item.status === "waiting" || item.status === "error");
+              const progress = item.lectureId ? transcriptionProgress[item.lectureId] : undefined;
+
+              return (
+                <li
+                  key={item.queueId}
+                  className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="break-all text-sm font-medium text-slate-100">{item.filename}</p>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${sourceBadgeClass(item.sourceType)}`}
+                        >
+                          {sourceLabel(item.sourceType)}
+                        </span>
+                        <span className="text-xs text-slate-400">{stageLabel(item.stage)}</span>
+                      </div>
+
+                      {item.metadata ? (
+                        <p className="text-xs text-slate-400">
+                          {formatDuration(item.metadata.duration_seconds)} /{" "}
+                          {formatSize(item.metadata.size_bytes)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          {item.stage === "extracting audio"
+                            ? "Extracting 16kHz mono WAV from video..."
+                            : "Preparing import..."}
+                        </p>
+                      )}
+
+                      <p className="break-all text-xs text-slate-500">{item.sourcePath}</p>
+                      {item.error && <p className="text-xs text-red-300">{item.error}</p>}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(item.status)}`}
+                      >
+                        {item.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeQueueItem(item.queueId)}
+                        disabled={!canRemove}
+                        className="rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass(item.status)}`}
-                    >
-                      {item.status}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeQueueItem(item.lectureId)}
-                      disabled={isBatchRunning || item.status !== "waiting"}
-                      className="rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-
-                {activeQueueLectureId === item.lectureId && item.status === "processing" && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-blue-300">Currently processing...</p>
-                    {transcriptionProgress[item.lectureId] && (
+                  {activeQueueLectureId === item.lectureId && item.stage === "transcribing" && progress && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-blue-300">Currently transcribing...</p>
                       <p className="text-xs text-slate-300">
-                        Transcription {transcriptionProgress[item.lectureId].percent}%{" "}
-                        {typeof transcriptionProgress[item.lectureId].chunk_index === "number" &&
-                        typeof transcriptionProgress[item.lectureId].chunk_total === "number"
-                          ? `• chunk ${transcriptionProgress[item.lectureId].chunk_index}/${transcriptionProgress[item.lectureId].chunk_total}`
+                        Transcription {progress.percent}%{" "}
+                        {typeof progress.chunk_index === "number" &&
+                        typeof progress.chunk_total === "number"
+                          ? `• chunk ${progress.chunk_index}/${progress.chunk_total}`
                           : ""}
-                        {typeof transcriptionProgress[item.lectureId].chunk_percent === "number"
-                          ? ` • segment ${Math.round(transcriptionProgress[item.lectureId].chunk_percent ?? 0)}%`
+                        {typeof progress.chunk_percent === "number"
+                          ? ` • segment ${Math.round(progress.chunk_percent ?? 0)}%`
                           : ""}
-                        {formatEta(transcriptionProgress[item.lectureId].eta_seconds) ? ` • ETA ${formatEta(transcriptionProgress[item.lectureId].eta_seconds)}` : ""}
+                        {formatEta(progress.eta_seconds)
+                          ? ` • ETA ${formatEta(progress.eta_seconds)}`
+                          : ""}
                       </p>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

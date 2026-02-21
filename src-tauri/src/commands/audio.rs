@@ -1,5 +1,6 @@
 use crate::db::queries::{upsert_lecture, LectureRecord};
 use crate::db::AppDatabase;
+use crate::utils::ffmpeg::resolve_ffmpeg_path;
 use chrono::Utc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use fs2::available_space;
@@ -7,6 +8,7 @@ use serde::Serialize;
 use std::fs::{self, File};
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -20,8 +22,28 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 use uuid::Uuid;
 
-const SUPPORTED_EXTENSIONS: [&str; 6] = ["mp3", "wav", "m4a", "ogg", "webm", "mp4"];
+const SUPPORTED_AUDIO_EXTENSIONS: [&str; 4] = ["mp3", "wav", "m4a", "ogg"];
+const SUPPORTED_VIDEO_EXTENSIONS: [&str; 6] = ["mp4", "mov", "mkv", "webm", "avi", "m4v"];
+const SUPPORTED_EXTENSIONS: [&str; 10] = [
+    "mp3", "wav", "m4a", "ogg", "mp4", "mov", "mkv", "webm", "avi", "m4v",
+];
 const MIN_RECORDING_FREE_SPACE_BYTES: u64 = 64 * 1024 * 1024;
+const MIN_VIDEO_IMPORT_FREE_SPACE_BYTES: u64 = 256 * 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SourceType {
+    Audio,
+    Video,
+}
+
+impl SourceType {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Audio => "audio",
+            Self::Video => "video",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AudioFileMetadata {
@@ -30,6 +52,7 @@ pub struct AudioFileMetadata {
     pub path: String,
     pub duration_seconds: f64,
     pub size_bytes: u64,
+    pub source_type: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -45,17 +68,29 @@ enum AudioError {
     #[error("The selected path is not a file.")]
     NotAFile,
     #[error(
-        "Unsupported file extension: {0}. Supported formats are mp3, wav, m4a, ogg, webm, mp4."
+        "Unsupported file extension: {0}. Supported formats are mp3, wav, m4a, ogg, mp4, mov, mkv, webm, avi, m4v."
     )]
     UnsupportedExtension(String),
     #[error("Unable to access the app data directory.")]
     AppDataDirUnavailable,
     #[error("Unable to check available disk space.")]
     DiskSpaceCheckFailed,
-    #[error("Not enough free disk space to save audio data. Free up space and try again.")]
+    #[error("Not enough free disk space to save media data. Free up space and try again.")]
     DiskSpaceInsufficient,
-    #[error("Failed to save the audio file.")]
+    #[error("Failed to save the media file.")]
     SaveFailed,
+    #[error(
+        "Unable to find ffmpeg. Reinstall Cognote (bundled ffmpeg) or install ffmpeg on your system."
+    )]
+    FfmpegMissing,
+    #[error(
+        "Unable to extract audio from the video. This codec or container may not be supported. Convert to MP4 (H.264/AAC) and try again."
+    )]
+    UnsupportedVideoCodec,
+    #[error(
+        "Video conversion failed. Convert the video to MP4 with AAC audio and try uploading again."
+    )]
+    VideoExtractionFailed,
     #[error("Unable to read audio metadata. The file may be corrupt or unsupported.")]
     MetadataReadFailed,
     #[error("No readable audio track was found. The file may be corrupt or unsupported.")]
@@ -78,6 +113,8 @@ enum AudioError {
     StateLockFailed,
     #[error("Unable to update lecture records.")]
     DatabaseFailed,
+    #[error("Media import worker failed.")]
+    BackgroundTaskFailed,
 }
 
 impl From<AudioError> for String {
@@ -121,12 +158,21 @@ pub fn pick_audio_files() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn accept_audio_file(
+pub async fn accept_audio_file(
     app: AppHandle,
     database: State<'_, AppDatabase>,
     path: String,
 ) -> Result<AudioFileMetadata, String> {
-    accept_audio_file_impl(&app, database.inner(), &path).map_err(Into::into)
+    let app_handle = app.clone();
+    let database_handle = database.inner().clone();
+    let worker_path = path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        accept_audio_file_impl(&app_handle, &database_handle, &worker_path)
+    })
+    .await
+    .map_err(|_| AudioError::BackgroundTaskFailed)?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -158,16 +204,30 @@ fn accept_audio_file_impl(
         return Err(AudioError::NotAFile);
     }
 
-    let extension = get_extension(&source_path)?;
+    let (extension, source_type) = get_extension_and_source_type(&source_path)?;
     let id = Uuid::new_v4().to_string();
     let lectures_dir = get_lectures_dir(app)?;
     let source_size = fs::metadata(&source_path)
         .map_err(|_| AudioError::MetadataReadFailed)?
         .len();
-    ensure_available_space(&lectures_dir, source_size)?;
-    let destination_path = lectures_dir.join(format!("{id}.{extension}"));
+    let estimated_bytes = match source_type {
+        SourceType::Audio => source_size,
+        SourceType::Video => source_size
+            .saturating_mul(2)
+            .max(MIN_VIDEO_IMPORT_FREE_SPACE_BYTES),
+    };
+    ensure_available_space(&lectures_dir, estimated_bytes)?;
 
-    fs::copy(&source_path, &destination_path).map_err(|_| AudioError::SaveFailed)?;
+    let destination_path = match source_type {
+        SourceType::Audio => lectures_dir.join(format!("{id}.{extension}")),
+        SourceType::Video => lectures_dir.join(format!("{id}.wav")),
+    };
+
+    if source_type == SourceType::Audio {
+        fs::copy(&source_path, &destination_path).map_err(|_| AudioError::SaveFailed)?;
+    } else {
+        extract_video_audio(app, &source_path, &destination_path)?;
+    }
 
     let filename = source_path
         .file_name()
@@ -175,7 +235,7 @@ fn accept_audio_file_impl(
         .map(str::to_owned)
         .unwrap_or_else(|| format!("{id}.{extension}"));
 
-    let metadata = build_audio_metadata(id, filename, &destination_path)?;
+    let metadata = build_audio_metadata(id, filename, &destination_path, source_type)?;
     persist_lecture_metadata(database, &metadata)?;
     Ok(metadata)
 }
@@ -281,6 +341,7 @@ fn stop_recording_impl(
         recording_id.clone(),
         format!("{recording_id}.wav"),
         &output_path,
+        SourceType::Audio,
     )?;
     persist_lecture_metadata(database, &metadata)?;
     Ok(metadata)
@@ -498,6 +559,7 @@ fn build_audio_metadata(
     id: String,
     filename: String,
     file_path: &Path,
+    source_type: SourceType,
 ) -> Result<AudioFileMetadata, AudioError> {
     let file_metadata = fs::metadata(file_path).map_err(|_| AudioError::MetadataReadFailed)?;
     let duration_seconds = extract_duration_seconds(file_path)?;
@@ -508,6 +570,7 @@ fn build_audio_metadata(
         path: file_path.to_string_lossy().to_string(),
         duration_seconds,
         size_bytes: file_metadata.len(),
+        source_type: source_type.as_str().to_string(),
     })
 }
 
@@ -597,18 +660,90 @@ fn get_lectures_dir(app: &AppHandle) -> Result<PathBuf, AudioError> {
     Ok(lectures_dir)
 }
 
-fn get_extension(path: &Path) -> Result<String, AudioError> {
+fn get_extension_and_source_type(path: &Path) -> Result<(String, SourceType), AudioError> {
     let extension = path
         .extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
         .ok_or_else(|| AudioError::UnsupportedExtension("none".to_string()))?;
 
-    if SUPPORTED_EXTENSIONS.contains(&extension.as_str()) {
-        Ok(extension)
-    } else {
-        Err(AudioError::UnsupportedExtension(extension))
+    if SUPPORTED_AUDIO_EXTENSIONS.contains(&extension.as_str()) {
+        return Ok((extension, SourceType::Audio));
     }
+
+    if SUPPORTED_VIDEO_EXTENSIONS.contains(&extension.as_str()) {
+        return Ok((extension, SourceType::Video));
+    }
+
+    Err(AudioError::UnsupportedExtension(extension))
+}
+
+fn extract_video_audio(
+    app: &AppHandle,
+    source_path: &Path,
+    target_path: &Path,
+) -> Result<(), AudioError> {
+    let temp_output = target_path.with_extension("tmp.wav");
+    let ffmpeg_path = resolve_ffmpeg_path(Some(app));
+    let ffmpeg_output = Command::new(ffmpeg_path)
+        .arg("-y")
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-i")
+        .arg(source_path.as_os_str())
+        .arg("-vn")
+        .arg("-ac")
+        .arg("1")
+        .arg("-ar")
+        .arg("16000")
+        .arg("-f")
+        .arg("wav")
+        .arg(temp_output.as_os_str())
+        .output();
+
+    match ffmpeg_output {
+        Ok(output) if output.status.success() => {
+            fs::rename(&temp_output, target_path).map_err(|_| {
+                fs::remove_file(&temp_output).ok();
+                AudioError::SaveFailed
+            })?;
+            Ok(())
+        }
+        Ok(output) => {
+            fs::remove_file(&temp_output).ok();
+            Err(map_ffmpeg_failure(&String::from_utf8_lossy(&output.stderr)))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::remove_file(&temp_output).ok();
+            Err(AudioError::FfmpegMissing)
+        }
+        Err(_) => {
+            fs::remove_file(&temp_output).ok();
+            Err(AudioError::VideoExtractionFailed)
+        }
+    }
+}
+
+fn map_ffmpeg_failure(stderr: &str) -> AudioError {
+    let normalized = stderr.to_ascii_lowercase();
+
+    if normalized.contains("does not contain any stream")
+        || normalized.contains("stream map 'a' matches no streams")
+        || normalized.contains("output file #0 does not contain any stream")
+    {
+        return AudioError::MissingAudioTrack;
+    }
+
+    if normalized.contains("unsupported")
+        || normalized.contains("invalid data")
+        || normalized.contains("could not find codec parameters")
+        || normalized.contains("unknown decoder")
+    {
+        return AudioError::UnsupportedVideoCodec;
+    }
+
+    AudioError::VideoExtractionFailed
 }
 
 fn ensure_available_space(directory: &Path, required_bytes: u64) -> Result<(), AudioError> {
@@ -629,6 +764,7 @@ fn persist_lecture_metadata(
         id: metadata.id.clone(),
         filename: metadata.filename.clone(),
         audio_path: metadata.path.clone(),
+        source_type: metadata.source_type.clone(),
         duration: metadata.duration_seconds,
         status: "uploaded".to_string(),
         created_at: Utc::now().to_rfc3339(),
