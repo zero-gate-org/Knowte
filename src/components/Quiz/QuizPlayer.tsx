@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { HOTKEY_EVENT_NAMES } from "../../lib/hotkeys";
 import type { Question, Quiz } from "../../lib/types";
 import { QuestionCard } from "./QuestionCard";
 
@@ -47,6 +48,7 @@ function NavDot({ index, isCurrent, isSubmitted, isCorrect, onClick }: NavDotPro
   return (
     <button
       key={index}
+      type="button"
       onClick={onClick}
       title={`Question ${index + 1}`}
       className={style}
@@ -117,8 +119,33 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
     onComplete(answers, score);
   }
 
+  const goToPreviousQuestion = useCallback(() => {
+    setCurrentIndex((index) => Math.max(0, index - 1));
+  }, []);
+
+  const goToNextQuestion = useCallback(() => {
+    setCurrentIndex((index) => Math.min(total - 1, index + 1));
+  }, [total]);
+
+  useEffect(() => {
+    const handlePreviousShortcut = () => {
+      goToPreviousQuestion();
+    };
+    const handleNextShortcut = () => {
+      goToNextQuestion();
+    };
+
+    window.addEventListener(HOTKEY_EVENT_NAMES.previousQuizQuestion, handlePreviousShortcut);
+    window.addEventListener(HOTKEY_EVENT_NAMES.nextQuizQuestion, handleNextShortcut);
+
+    return () => {
+      window.removeEventListener(HOTKEY_EVENT_NAMES.previousQuizQuestion, handlePreviousShortcut);
+      window.removeEventListener(HOTKEY_EVENT_NAMES.nextQuizQuestion, handleNextShortcut);
+    };
+  }, [goToNextQuestion, goToPreviousQuestion]);
+
   return (
-    <div className="flex flex-col gap-5 max-w-2xl mx-auto w-full">
+    <div data-quiz-player="true" className="flex flex-col gap-5 max-w-2xl mx-auto w-full">
       {/* Top bar: progress */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-slate-400">
@@ -152,7 +179,8 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
       {/* Action buttons */}
       <div className="flex items-center justify-between gap-3">
         <button
-          onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+          type="button"
+          onClick={goToPreviousQuestion}
           disabled={currentIndex === 0}
           className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-700/60 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
@@ -162,6 +190,7 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
         <div className="flex gap-2 items-center">
           {!isCurrentSubmitted ? (
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!currentAnswer || currentAnswer.trim() === ""}
               className="px-5 py-2 rounded-lg text-sm font-semibold bg-violet-700 hover:bg-violet-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
@@ -170,6 +199,7 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
             </button>
           ) : allSubmitted ? (
             <button
+              type="button"
               onClick={handleFinish}
               className="px-5 py-2 rounded-lg text-sm font-semibold bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
             >
@@ -177,6 +207,7 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => {
                 // Advance to next unanswered question, or next in order
                 const nextUnanswered = questions.findIndex(
@@ -196,7 +227,8 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
         </div>
 
         <button
-          onClick={() => setCurrentIndex((i) => Math.min(total - 1, i + 1))}
+          type="button"
+          onClick={goToNextQuestion}
           disabled={currentIndex === total - 1}
           className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 bg-slate-700/60 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
@@ -226,6 +258,7 @@ export function QuizPlayer({ quiz, onComplete, onRegenerateQuiz, isRegenerating 
       {/* Regenerate quiz */}
       <div className="flex justify-center pt-1">
         <button
+          type="button"
           onClick={onRegenerateQuiz}
           disabled={isRegenerating}
           className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"

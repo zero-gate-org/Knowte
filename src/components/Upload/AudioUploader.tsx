@@ -125,9 +125,17 @@ export default function AudioUploader() {
         </p>
       </header>
 
-      <div className="inline-flex rounded-lg border border-slate-700 bg-slate-800 p-1">
+      <div
+        className="inline-flex rounded-lg border border-slate-700 bg-slate-800 p-1"
+        role="tablist"
+        aria-label="Audio input modes"
+      >
         <button
           type="button"
+          id="upload-tab"
+          role="tab"
+          aria-selected={activeTab === "upload"}
+          aria-controls="audio-input-panel"
           onClick={() => setActiveTab("upload")}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "upload"
@@ -139,6 +147,10 @@ export default function AudioUploader() {
         </button>
         <button
           type="button"
+          id="record-tab"
+          role="tab"
+          aria-selected={activeTab === "record"}
+          aria-controls="audio-input-panel"
           onClick={() => setActiveTab("record")}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === "record"
@@ -150,7 +162,12 @@ export default function AudioUploader() {
         </button>
       </div>
 
-      <section className="rounded-xl border border-slate-700 bg-slate-800/70 p-6">
+      <section
+        id="audio-input-panel"
+        role="tabpanel"
+        aria-labelledby={activeTab === "upload" ? "upload-tab" : "record-tab"}
+        className="rounded-xl border border-slate-700 bg-slate-800/70 p-6"
+      >
         {activeTab === "upload" ? (
           <DropZone
             onUploadSuccess={handleAudioSuccess}

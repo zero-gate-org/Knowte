@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { HOTKEY_EVENT_NAMES } from "../../lib/hotkeys";
 import { startRecording as apiStartRecording, stopRecording as apiStopRecording } from "../../lib/tauriApi";
 import type { AudioFileMetadata } from "../../lib/types";
 
@@ -113,7 +114,7 @@ export default function LiveRecorder({
     setLevels(createEmptyLevels());
   };
 
-  const handleStartRecording = async () => {
+  const handleStartRecording = useCallback(async () => {
     if (disabled || isBusy || recordingId) {
       return;
     }
@@ -137,9 +138,9 @@ export default function LiveRecorder({
     } finally {
       setIsBusy(false);
     }
-  };
+  }, [disabled, isBusy, onRecordingStateChange, recordingId]);
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = useCallback(async () => {
     if (isBusy || !recordingId) {
       return;
     }
@@ -160,7 +161,20 @@ export default function LiveRecorder({
     } finally {
       setIsBusy(false);
     }
-  };
+  }, [isBusy, onRecordingSaved, onRecordingStateChange, recordingId]);
+
+  useEffect(() => {
+    const handleGlobalStop = () => {
+      if (recordingIdRef.current) {
+        void handleStopRecording();
+      }
+    };
+
+    window.addEventListener(HOTKEY_EVENT_NAMES.stopRecording, handleGlobalStop);
+    return () => {
+      window.removeEventListener(HOTKEY_EVENT_NAMES.stopRecording, handleGlobalStop);
+    };
+  }, [handleStopRecording]);
 
   useEffect(() => {
     return () => {
@@ -185,6 +199,7 @@ export default function LiveRecorder({
             type="button"
             onClick={() => void handleStartRecording()}
             disabled={disabled || isBusy}
+            aria-label="Start recording"
             className="flex h-20 w-20 items-center justify-center rounded-full bg-red-500 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Record
@@ -194,6 +209,7 @@ export default function LiveRecorder({
             type="button"
             onClick={() => void handleStopRecording()}
             disabled={isBusy}
+            aria-label="Stop recording"
             className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-900 shadow-lg transition-transform hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Stop

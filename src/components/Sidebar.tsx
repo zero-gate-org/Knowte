@@ -42,13 +42,18 @@ export default function Sidebar() {
         )}
       </div>
 
-      <nav className="flex-1 p-2">
+      <nav
+        className="flex-1 p-2"
+        role="tablist"
+        aria-label={currentLectureId ? "Lecture view navigation" : "Primary navigation"}
+      >
         {currentLectureId ? (
           <ul className="space-y-1">
             <li>
               <NavLink
                 to="/"
                 end
+                role="tab"
                 className={({ isActive }) => navLinkClass(isActive)}
               >
                 Back to Library
@@ -58,6 +63,7 @@ export default function Sidebar() {
               <li key={item.segment}>
                 <NavLink
                   to={`/lecture/${currentLectureId}/${item.segment}`}
+                  role="tab"
                   className={({ isActive }) => navLinkClass(isActive)}
                 >
                   {item.label}
@@ -72,6 +78,7 @@ export default function Sidebar() {
                 <NavLink
                   to={item.to}
                   end={item.end}
+                  role="tab"
                   className={({ isActive }) => navLinkClass(isActive)}
                 >
                   {item.label}

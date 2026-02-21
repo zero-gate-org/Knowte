@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
+import { GLOBAL_SHORTCUTS, LECTURE_VIEW_SHORTCUTS } from "../../lib/hotkeys";
 import { useSettingsStore, useToastStore } from "../../stores";
 import ModelSelector from "./ModelSelector";
 import PersonalizationConfig from "./PersonalizationConfig";
 import type { Settings } from "../../lib/types";
+
+function renderShortcutKeys(keys: string) {
+  return keys.split("+").map((part) => (
+    <kbd
+      key={`${keys}-${part}`}
+      className="rounded border border-slate-500 bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-100"
+    >
+      {part}
+    </kbd>
+  ));
+}
 
 export default function SettingsPanel() {
   const { settings, isLoading, isSaving, error, loadSettings, saveSettings, checkOllama } =
@@ -167,6 +179,43 @@ export default function SettingsPanel() {
               </p>
             </div>
           </label>
+        </div>
+
+        <div className="p-6 bg-slate-800 rounded-lg border border-slate-700 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-slate-200">Keyboard Shortcuts</h2>
+            <p className="text-xs text-slate-400">
+              Press <kbd className="rounded border border-slate-500 bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-200">?</kbd> anywhere in the app to open the full shortcuts modal.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Global</p>
+              {GLOBAL_SHORTCUTS.map((shortcut) => (
+                <div
+                  key={shortcut.keys}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2"
+                >
+                  <div className="flex items-center gap-1">{renderShortcutKeys(shortcut.keys)}</div>
+                  <span className="text-xs text-slate-300">{shortcut.action}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Lecture Views</p>
+              {LECTURE_VIEW_SHORTCUTS.map((shortcut) => (
+                <div
+                  key={shortcut.key}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2"
+                >
+                  <div className="flex items-center gap-1">{renderShortcutKeys(`Ctrl+${shortcut.key}`)}</div>
+                  <span className="text-xs text-slate-300">{shortcut.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end">

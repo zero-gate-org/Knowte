@@ -275,6 +275,7 @@ export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
     <>
       <div className="flex items-center gap-3 flex-wrap">
         <button
+          type="button"
           onClick={handleCopyMarkdown}
           className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition-colors"
         >
@@ -282,6 +283,8 @@ export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
         </button>
 
         <button
+          type="button"
+          data-hotkey-export="true"
           onClick={handleDownloadMarkdown}
           disabled={savingMd}
           className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 rounded-lg text-sm font-medium transition-colors"
@@ -290,6 +293,7 @@ export function NotesExport({ lectureId, notes, summary }: NotesExportProps) {
         </button>
 
         <button
+          type="button"
           onClick={handlePrint}
           className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition-colors"
         >

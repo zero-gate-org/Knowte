@@ -2,6 +2,40 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 6.2] - 2026-02-21
+- Added: Global keyboard shortcut system via `useHotkeys` with support for `Ctrl+N`, `Ctrl+1..7`, `Ctrl+,`, `Ctrl+H`, `Ctrl+Shift+E`, `?`, `Escape`, `Space`, and arrow navigation
+- Added: `KeyboardShortcutsModal` dialog with grouped shortcut reference grid, focus-on-open behavior, and overlay dismissal
+- Added: Route accessibility improvements in app shell: automatic main-content focus on navigation and screen-reader live announcements for view changes
+- Added: Reduced-motion support for flashcard flipping, switching to opacity-based transitions when `prefers-reduced-motion` is enabled
+- Changed: Flashcard, quiz, transcript, and recorder views to respond to hotkey-dispatched events for next/previous navigation, audio play/pause, and stop-recording behavior
+- Changed: Export actions in Notes, Flashcards, and Mind Map are now discoverable by `Ctrl+Shift+E` through shared `data-hotkey-export` targets
+- Changed: Settings page now includes an in-app keyboard shortcut reference panel so users can discover shortcuts without opening the modal first
+- Changed: Accessibility polish across UI controls (global focus-visible outlines, tab roles for custom tab UI, ARIA labels/hidden SVG metadata for non-text icons)
+- Files modified:
+  - src/App.tsx
+  - src/components/index.ts
+  - src/components/Sidebar.tsx
+  - src/components/Settings/SettingsPanel.tsx
+  - src/components/Upload/AudioUploader.tsx
+  - src/components/Upload/LiveRecorder.tsx
+  - src/components/Flashcards/FlashcardViewer.tsx
+  - src/components/Flashcards/AnkiExport.tsx
+  - src/components/Notes/NotesExport.tsx
+  - src/components/MindMap/MindMapCanvas.tsx
+  - src/components/Quiz/QuizPlayer.tsx
+  - src/components/Quiz/QuizResults.tsx
+  - src/components/Library/EmptyState.tsx
+  - src/components/Pipeline/ProgressTracker.tsx
+  - src/components/KeyboardShortcuts/KeyboardShortcutsModal.tsx (new)
+  - src/components/KeyboardShortcuts/index.ts (new)
+  - src/hooks/useHotkeys.ts (new)
+  - src/hooks/index.ts
+  - src/lib/hotkeys.ts (new)
+  - src/lib/index.ts
+  - src/pages/Transcript.tsx
+  - src/pages/MindMap.tsx
+  - src/index.css
+
 ## [Task 6.1] - 2026-02-21
 - Added: Global React error boundary (`AppErrorBoundary`) with a safe fallback screen and reload action to prevent raw crash output in the UI
 - Added: Global toast notification system (Zustand + `ToastViewport`) with success/warning/error/info variants, auto-dismiss after 5 seconds, click-to-dismiss, and a max stack of 3 toasts

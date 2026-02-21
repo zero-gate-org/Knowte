@@ -4,6 +4,7 @@ import {
   TranscriptEditor,
   TranscriptViewer,
 } from "../components";
+import { HOTKEY_EVENT_NAMES } from "../lib/hotkeys";
 import { getAudioServerPort, getLectureTranscript } from "../lib/tauriApi";
 import { useLectureStore } from "../stores";
 
@@ -211,6 +212,23 @@ export default function Transcript() {
     audio.currentTime = clampedTime;
     setCurrentTime(clampedTime);
   }, [duration]);
+
+  useEffect(() => {
+    const handlePlaybackToggle = () => {
+      handleTogglePlay();
+    };
+
+    window.addEventListener(
+      HOTKEY_EVENT_NAMES.toggleTranscriptPlayback,
+      handlePlaybackToggle,
+    );
+    return () => {
+      window.removeEventListener(
+        HOTKEY_EVENT_NAMES.toggleTranscriptPlayback,
+        handlePlaybackToggle,
+      );
+    };
+  }, [handleTogglePlay]);
 
   const activeSegmentIndex = useMemo(() => {
     const segments = lecture?.transcriptSegments ?? [];

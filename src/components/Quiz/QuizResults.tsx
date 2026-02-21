@@ -25,7 +25,13 @@ function CircularProgress({ score, total }: CircularProgressProps) {
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative">
-        <svg width="132" height="132" viewBox="0 0 132 132" className="-rotate-90">
+        <svg
+          aria-hidden="true"
+          width="132"
+          height="132"
+          viewBox="0 0 132 132"
+          className="-rotate-90"
+        >
           {/* Background circle */}
           <circle
             cx="66"

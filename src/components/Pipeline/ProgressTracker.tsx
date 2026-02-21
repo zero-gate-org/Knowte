@@ -27,6 +27,7 @@ const TOTAL_STAGES = PIPELINE_STAGES.length;
 function SpinnerIcon() {
   return (
     <svg
+      aria-hidden="true"
       className="h-4 w-4 animate-spin text-blue-400"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
@@ -76,18 +77,18 @@ function StageRow({
       <div className="flex items-center gap-3">
         <div className={`flex-shrink-0 ${iconColors[stage.status]}`}>
           {stage.status === "pending" && (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <circle cx="12" cy="12" r="8" strokeWidth="2" />
             </svg>
           )}
           {stage.status === "running" && <SpinnerIcon />}
           {stage.status === "complete" && (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           )}
           {stage.status === "error" && (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           )}

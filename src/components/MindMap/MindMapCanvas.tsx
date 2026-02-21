@@ -296,6 +296,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
       {/* Toolbar */}
       <div className="absolute top-3 right-3 flex gap-2 z-10">
         <button
+          type="button"
           onClick={handleFitView}
           className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-colors"
           title="Fit the full map in view"
@@ -303,6 +304,8 @@ function InnerCanvas({ data }: { data: MindMapData }) {
           Fit View
         </button>
         <button
+          type="button"
+          data-hotkey-export="true"
           onClick={downloadPng}
           className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-colors"
           title="Download as PNG"
@@ -310,6 +313,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
           ↓ PNG
         </button>
         <button
+          type="button"
           onClick={downloadSvg}
           className="px-3 py-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 transition-colors"
           title="Download as SVG"
@@ -318,6 +322,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
         </button>
         {selectedBranch !== null && (
           <button
+            type="button"
             onClick={() => setSelectedBranch(null)}
             className="px-3 py-1.5 text-xs font-medium bg-violet-700 hover:bg-violet-600 text-white rounded-lg border border-violet-500 transition-colors"
           >

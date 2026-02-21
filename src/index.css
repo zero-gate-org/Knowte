@@ -9,3 +9,16 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgb(59 130 246) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.35);
+}
