@@ -158,6 +158,16 @@ export async function getLecturePapers(lectureId: string): Promise<Paper[] | nul
   return invoke<Paper[] | null>("get_lecture_papers", { lectureId });
 }
 
+// ─── Mind Map Commands ────────────────────────────────────────────────────────
+
+/**
+ * Re-run the mind-map generation stage for a lecture using the current LLM
+ * settings.  Returns the new mind-map JSON string, or null on error.
+ */
+export async function regenerateMindmap(lectureId: string): Promise<string | null> {
+  return invoke<string | null>("regenerate_mindmap", { lectureId });
+}
+
 // ─── Notes Commands ───────────────────────────────────────────────────────────
 
 /**

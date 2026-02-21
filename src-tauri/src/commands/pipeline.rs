@@ -369,6 +369,78 @@ pub async fn regenerate_quiz(
     Ok(Some(json))
 }
 
+// ─── Regenerate Mind Map ──────────────────────────────────────────────────────
+
+/// Re-run the mind-map generation stage for a lecture using the current LLM
+/// settings.  Returns the new mind-map JSON (or an error string).
+#[tauri::command]
+pub async fn regenerate_mindmap(
+    app: AppHandle,
+    lecture_id: String,
+) -> Result<Option<String>, String> {
+    use crate::commands::llm::{parse_json_from_response, OllamaClient};
+    use crate::utils::prompt_templates;
+
+    let db = app
+        .try_state::<AppDatabase>()
+        .ok_or_else(|| "Database not initialised".to_string())?;
+
+    let conn = db.connect().map_err(|e| e.to_string())?;
+    let transcript_rec =
+        crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    drop(conn);
+
+    let settings = crate::commands::settings::get_settings(app.clone())
+        .map_err(|e| e.to_string())?;
+
+    let model = settings.llm_model.clone();
+    let level = settings.personalization_level.clone();
+
+    const CHUNK_CHARS: usize = 16_000;
+    let context_text = if transcript_rec.full_text.len() > CHUNK_CHARS {
+        transcript_rec.full_text[..CHUNK_CHARS].to_string()
+    } else {
+        transcript_rec.full_text.clone()
+    };
+
+    let client = OllamaClient::new(settings.ollama_url.clone());
+    let prompt = prompt_templates::mindmap_prompt(&context_text, &level);
+
+    let raw = client
+        .generate(&app, &model, &prompt, &lecture_id, "mindmap")
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let extracted = parse_json_from_response(&raw);
+
+    let json = if serde_json::from_str::<serde_json::Value>(&extracted).is_ok() {
+        extracted
+    } else {
+        let retry_prompt = format!(
+            "{}\n\nIMPORTANT: Output ONLY valid JSON with no additional text or markdown fences.",
+            prompt
+        );
+        let retry_raw = client
+            .generate(&app, &model, &retry_prompt, &lecture_id, "mindmap_retry")
+            .await
+            .map_err(|e| e.to_string())?;
+        let retry_extracted = parse_json_from_response(&retry_raw);
+        if serde_json::from_str::<serde_json::Value>(&retry_extracted).is_ok() {
+            retry_extracted
+        } else {
+            return Err("LLM did not return valid JSON after retry.".to_string());
+        }
+    };
+
+    let conn = db.connect().map_err(|e| e.to_string())?;
+    crate::db::queries::upsert_mindmap(&conn, &lecture_id, &json)
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(json))
+}
+
 // ─── Save Quiz Attempt ────────────────────────────────────────────────────────
 
 /// Save a quiz attempt (user answers + score) to the database.

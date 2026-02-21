@@ -2,6 +2,23 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 4.3] - 2026-02-21
+- Added: `src/components/MindMap/MindMapCanvas.tsx` — interactive mind map using `@xyflow/react` v12; converts `MindMapData` tree to ReactFlow nodes/edges; dagre LR auto-layout; four depth-based node styles (root/indigo, level-1/blue, level-2/green, level-3+/slate); click node to highlight branch (dims others), click background to clear; "Fit View", "Download as PNG" (html-to-image, 2× pixel ratio), "Download as SVG" toolbar buttons; MiniMap in bottom-right; zoom/pan via built-in ReactFlow controls; `ReactFlowProvider` wrapper
+- Added: `src/components/MindMap/index.ts` — barrel export for MindMap components
+- Changed: `src/components/index.ts` — added `export * from "./MindMap"`
+- Changed: `src/pages/MindMap.tsx` — full mind map page; loads mind map JSON via `getMindmap` on lecture change; "Generate Mind Map" empty-state button (calls `regenerateMindmap`); "↺ Regenerate" header button when map exists; loading spinner; error/empty/no-lecture states
+- Changed: `src/lib/tauriApi.ts` — added `regenerateMindmap` typed wrapper
+- Added: `src-tauri/src/commands/pipeline.rs` — `regenerate_mindmap` async command: loads transcript, truncates to 16k chars, calls `mindmap_prompt` with JSON retry, upserts to DB, returns new JSON
+- Changed: `src-tauri/src/lib.rs` — registered `regenerate_mindmap` in invoke handler
+- Files modified:
+  - src/components/MindMap/MindMapCanvas.tsx (new)
+  - src/components/MindMap/index.ts (new)
+  - src/components/index.ts
+  - src/pages/MindMap.tsx
+  - src/lib/tauriApi.ts
+  - src-tauri/src/commands/pipeline.rs
+  - src-tauri/src/lib.rs
+
 ## [Task 4.2] - 2026-02-21
 - Added: `src/components/Quiz/QuestionCard.tsx` — reusable question display component; handles all three question types (multiple_choice with radio-card options, true_false with two large buttons, short_answer with textarea); difficulty badge (easy/medium/hard with colour coding); post-submit feedback with green ✓ correct / red ✗ incorrect highlight, correct answer reveal, and explanation text
 - Added: `src/components/Quiz/QuizPlayer.tsx` — main quiz player with card-based layout; progress bar (answered/total); navigation dots at bottom with colour states (grey=unanswered, violet=current, green=correct, red=wrong, amber=self-graded short answer); Previous/Next arrow buttons + smart "Next Question" advance to first unanswered; "Submit Answer" button (disabled until answer selected); "See Results" button when all questions answered; "Generate New Quiz" link at bottom

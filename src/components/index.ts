@@ -4,3 +4,4 @@ export * from "./Upload";
 export * from "./Pipeline";
 export * from "./Transcript";
 export * from "./Notes";
+export * from "./MindMap";

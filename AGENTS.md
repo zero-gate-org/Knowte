@@ -183,7 +183,7 @@ cognote/
 | 3.3 Semantic Scholar Integration | ✅ Complete |
 | 4.1 Structured Notes View | ✅ Complete |
 | 4.2 Interactive Quiz | ✅ Complete |
-| 4.x Output Views (remaining) | 🔲 Pending |
+| 4.3 Mind Map Visualization | ✅ Complete |
 | 5.x Lecture Library | 🔲 Pending |
 | 6.x Polish | 🔲 Pending |
 | 7.x Advanced Features | 🔲 Pending |
