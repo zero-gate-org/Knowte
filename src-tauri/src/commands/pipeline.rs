@@ -461,3 +461,107 @@ pub async fn save_quiz_attempt(
     crate::db::queries::insert_quiz_attempt(&conn, &lecture_id, &answers_json, score, total_questions)
         .map_err(|e| e.to_string())
 }
+
+// ─── Flashcard Export ─────────────────────────────────────────────────────────
+
+/// Read stored flashcards for a lecture, open a native save-file dialog,
+/// and write an Anki .apkg file.  Returns the path or null if cancelled.
+#[tauri::command]
+pub fn export_flashcards_anki(
+    app: AppHandle,
+    lecture_id: String,
+) -> Result<Option<String>, String> {
+    use crate::utils::anki_export;
+
+    let db = app
+        .try_state::<AppDatabase>()
+        .ok_or_else(|| "Database not initialised".to_string())?;
+
+    let conn = db.connect().map_err(|e| e.to_string())?;
+    let flashcards_json = crate::db::queries::get_flashcards(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No flashcards found for this lecture.".to_string())?;
+
+    // Also look up lecture filename for the deck name
+    let lecture = crate::db::queries::get_lecture_by_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?;
+    drop(conn);
+
+    let deck_name = match &lecture {
+        Some(l) => {
+            let stem = std::path::Path::new(&l.filename)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| l.filename.clone());
+            format!("LectureToLearn::{stem}")
+        }
+        None => "LectureToLearn::Untitled".to_string(),
+    };
+
+    let cards = anki_export::parse_flashcards(&flashcards_json)?;
+
+    // Open native save dialog
+    let path = rfd::FileDialog::new()
+        .set_file_name("flashcards.apkg")
+        .add_filter("Anki Package", &["apkg"])
+        .save_file();
+
+    let Some(path) = path else {
+        return Ok(None); // User cancelled
+    };
+
+    let path_str = path.to_string_lossy().to_string();
+    anki_export::export_as_apkg(&cards, &deck_name, &path_str)?;
+
+    Ok(Some(path_str))
+}
+
+/// Read stored flashcards for a lecture, open a native save-file dialog,
+/// and write a tab-separated .txt file for Anki import.  Returns path or null.
+#[tauri::command]
+pub fn export_flashcards_tsv(
+    app: AppHandle,
+    lecture_id: String,
+) -> Result<Option<String>, String> {
+    use crate::utils::anki_export;
+
+    let db = app
+        .try_state::<AppDatabase>()
+        .ok_or_else(|| "Database not initialised".to_string())?;
+
+    let conn = db.connect().map_err(|e| e.to_string())?;
+    let flashcards_json = crate::db::queries::get_flashcards(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No flashcards found for this lecture.".to_string())?;
+
+    let lecture = crate::db::queries::get_lecture_by_id(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?;
+    drop(conn);
+
+    let deck_name = match &lecture {
+        Some(l) => {
+            let stem = std::path::Path::new(&l.filename)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| l.filename.clone());
+            format!("LectureToLearn::{stem}")
+        }
+        None => "LectureToLearn::Untitled".to_string(),
+    };
+
+    let cards = anki_export::parse_flashcards(&flashcards_json)?;
+
+    let path = rfd::FileDialog::new()
+        .set_file_name("flashcards.txt")
+        .add_filter("Text (Tab-Separated)", &["txt"])
+        .save_file();
+
+    let Some(path) = path else {
+        return Ok(None);
+    };
+
+    let path_str = path.to_string_lossy().to_string();
+    anki_export::export_as_tsv(&cards, &deck_name, &path_str)?;
+
+    Ok(Some(path_str))
+}

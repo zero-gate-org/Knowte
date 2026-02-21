@@ -2,6 +2,31 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 4.4] - 2026-02-21
+- Added: `src/components/Flashcards/FlashcardViewer.tsx` — card-flip animation using CSS 3D `rotateY` transform; browse mode with Previous/Next buttons and keyboard arrow navigation; space/enter to flip; shuffle button (Fisher-Yates); study mode with three-pile sorting (Know it / Almost / No clue), disabled until card is flipped; end-of-round stats screen with option to review weak cards or restart; tags rendered as pills on back face
+- Added: `src/components/Flashcards/AnkiExport.tsx` — dual export UI: Anki `.apkg` package button and tab-separated `.txt` button; native save-file dialog via Tauri; per-format loading/success/error states; on-screen import instructions after save
+- Added: `src/components/Flashcards/index.ts` — barrel exports
+- Changed: `src/pages/Flashcards.tsx` — full page wiring; loads flashcards JSON via `getFlashcards` on lecture change; empty-state handling; renders `FlashcardViewer` and `AnkiExport`
+- Changed: `src/components/index.ts` — added `export * from "./Flashcards"`
+- Changed: `src/lib/tauriApi.ts` — added `exportFlashcardsAnki` and `exportFlashcardsTsv` typed wrappers
+- Added: `src-tauri/src/utils/anki_export.rs` — `export_as_apkg`: creates a valid Anki 2.x SQLite collection (col/notes/cards/revlog/graves tables), packages it in a ZIP as `.apkg`; `export_as_tsv`: writes Anki-compatible tab-separated file with header directives; `parse_flashcards` helper; FNV-based field checksum
+- Changed: `src-tauri/src/utils/mod.rs` — added `pub mod anki_export`
+- Changed: `src-tauri/src/commands/pipeline.rs` — added `export_flashcards_anki` and `export_flashcards_tsv` sync Tauri commands; both open a native save-file dialog and call the respective utility
+- Changed: `src-tauri/src/lib.rs` — registered `export_flashcards_anki` and `export_flashcards_tsv` in invoke handler
+- Changed: `src-tauri/Cargo.toml` — added `zip = { version = "2", default-features = false, features = ["deflate"] }`
+- Files modified:
+  - src/components/Flashcards/FlashcardViewer.tsx (new)
+  - src/components/Flashcards/AnkiExport.tsx (new)
+  - src/components/Flashcards/index.ts (new)
+  - src/pages/Flashcards.tsx
+  - src/components/index.ts
+  - src/lib/tauriApi.ts
+  - src-tauri/src/utils/anki_export.rs (new)
+  - src-tauri/src/utils/mod.rs
+  - src-tauri/src/commands/pipeline.rs
+  - src-tauri/src/lib.rs
+  - src-tauri/Cargo.toml
+
 ## [Task 4.3] - 2026-02-21
 - Added: `src/components/MindMap/MindMapCanvas.tsx` — interactive mind map using `@xyflow/react` v12; converts `MindMapData` tree to ReactFlow nodes/edges; dagre LR auto-layout; four depth-based node styles (root/indigo, level-1/blue, level-2/green, level-3+/slate); click node to highlight branch (dims others), click background to clear; "Fit View", "Download as PNG" (html-to-image, 2× pixel ratio), "Download as SVG" toolbar buttons; MiniMap in bottom-right; zoom/pan via built-in ReactFlow controls; `ReactFlowProvider` wrapper
 - Added: `src/components/MindMap/index.ts` — barrel export for MindMap components

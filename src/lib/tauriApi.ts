@@ -196,6 +196,25 @@ export async function regenerateQuiz(lectureId: string): Promise<string | null> 
   return invoke<string | null>("regenerate_quiz", { lectureId });
 }
 
+// ─── Flashcard Export Commands ────────────────────────────────────────────────
+
+/**
+ * Open a native save-file dialog and write the flashcards as an Anki .apkg
+ * package.  Returns the saved file path, or null if the user cancelled.
+ */
+export async function exportFlashcardsAnki(lectureId: string): Promise<string | null> {
+  return invoke<string | null>("export_flashcards_anki", { lectureId });
+}
+
+/**
+ * Open a native save-file dialog and write the flashcards as a
+ * tab-separated .txt file for Anki import.
+ * Returns the saved file path, or null if the user cancelled.
+ */
+export async function exportFlashcardsTsv(lectureId: string): Promise<string | null> {
+  return invoke<string | null>("export_flashcards_tsv", { lectureId });
+}
+
 /**
  * Save a quiz attempt record (answers JSON and score) to the database.
  * Returns the id of the saved record.
