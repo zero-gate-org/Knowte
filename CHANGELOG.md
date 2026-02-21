@@ -2,6 +2,24 @@
 
 All notable changes to the Cognote project will be documented in this file.
 
+## [Task 3.1] - 2026-02-21
+- Added: `src-tauri/src/utils/prompt_templates.rs` with six prompt builder functions: `summarize_prompt`, `structured_notes_prompt`, `quiz_prompt`, `flashcards_prompt`, `mindmap_prompt`, `extract_keywords_prompt` — each injects a personalization preamble based on the configured study level
+- Added: `src-tauri/src/commands/llm.rs` with `OllamaClient` struct providing `generate()` (streaming via `/api/generate`) and `is_available()` methods; custom `LlmError` thiserror enum; `parse_json_from_response()` helper that extracts JSON from markdown-wrapped responses
+- Added: Tauri command `generate_llm_response(lecture_id, stage, model, prompt, expect_json)` that streams tokens to the frontend as `llm-stream` events and retries once with an explicit JSON directive on parse failure
+- Added: Tauri command `check_llm_availability()` for quick Ollama reachability checks
+- Added: `LlmStreamEvent` TypeScript interface (`lecture_id`, `stage`, `token`, `done`)
+- Added: `generateLlmResponse` and `checkLlmAvailability` wrappers in `tauriApi.ts`
+- Changed: `StructuredNotes`, `Question`, `Quiz`, `Flashcard` TypeScript types updated to match LLM JSON output schemas from the prompt templates; added `NotesTopic`, `NotesTerm`, `QuestionType`, `QuestionDifficulty`, `FlashcardsOutput`, `KeywordsOutput`
+- Files modified:
+  - src-tauri/src/utils/prompt_templates.rs (new)
+  - src-tauri/src/commands/llm.rs (new)
+  - src-tauri/src/utils/mod.rs
+  - src-tauri/src/commands/mod.rs
+  - src-tauri/src/lib.rs
+  - src/lib/types.ts
+  - src/lib/tauriApi.ts
+  - CHANGELOG.md
+
 ## [Task 2.2] - 2026-02-21
 - Added: Transcript editing mode with per-segment `contenteditable` fields, 1-second debounced auto-save, and per-segment reset-to-original controls
 - Added: Fixed bottom transcript audio player with play/pause, seek slider, and playback speed controls (0.5x, 1x, 1.25x, 1.5x, 2x)

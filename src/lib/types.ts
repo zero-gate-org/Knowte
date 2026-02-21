@@ -52,28 +52,51 @@ export interface TranscriptUpdateResult {
   segments: TranscriptSegment[];
 }
 
-export interface StructuredNoteSection {
+// ─── LLM / Pipeline types ───────────────────────────────────────────────────
+
+/** Emitted as `llm-stream` Tauri event while the model generates tokens */
+export interface LlmStreamEvent {
+  lecture_id: string;
+  stage: string;
+  token: string;
+  done: boolean;
+}
+
+// Structured Notes (matches prompt schema)
+export interface NotesTopic {
   heading: string;
-  points: string[];
+  key_points: string[];
+  details: string;
+  examples: string[];
+}
+
+export interface NotesTerm {
+  term: string;
+  definition: string;
 }
 
 export interface StructuredNotes {
   title: string;
-  overview: string;
-  keyPoints: string[];
-  sections: StructuredNoteSection[];
+  topics: NotesTopic[];
+  key_terms: NotesTerm[];
+  takeaways: string[];
 }
 
+// Quiz (matches prompt schema)
+export type QuestionType = "multiple_choice" | "short_answer" | "true_false";
+export type QuestionDifficulty = "easy" | "medium" | "hard";
+
 export interface Question {
-  id: string;
-  prompt: string;
-  options: string[];
-  correctOptionIndex: number;
-  explanation?: string;
+  id: number;
+  type: QuestionType;
+  question: string;
+  options: string[] | null;
+  correct_answer: string;
+  explanation: string;
+  difficulty: QuestionDifficulty;
 }
 
 export interface Quiz {
-  title: string;
   questions: Question[];
 }
 
@@ -96,11 +119,20 @@ export interface MindMapData {
   root: MindMapNode;
 }
 
+// Flashcard (matches prompt schema)
 export interface Flashcard {
-  id: string;
   front: string;
   back: string;
-  tags?: string[];
+  tags: string[];
+}
+
+export interface FlashcardsOutput {
+  cards: Flashcard[];
+}
+
+// Keywords (matches extract_keywords prompt schema)
+export interface KeywordsOutput {
+  keywords: string[];
 }
 
 export type LectureStatus =

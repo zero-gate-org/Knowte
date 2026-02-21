@@ -9,6 +9,7 @@ use commands::audio::{
     accept_audio_file, pick_audio_file, start_recording, stop_recording, RecordingState,
 };
 use commands::settings::{check_ollama_status, get_settings, save_settings};
+use commands::llm::{check_llm_availability, generate_llm_response};
 use commands::transcribe::{
     check_whisper_models, download_whisper_model, get_lecture_audio_url, transcribe_audio,
     update_transcript_segment,
@@ -37,7 +38,9 @@ pub fn run() {
             check_whisper_models,
             transcribe_audio,
             update_transcript_segment,
-            get_lecture_audio_url
+            get_lecture_audio_url,
+            generate_llm_response,
+            check_llm_availability
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
