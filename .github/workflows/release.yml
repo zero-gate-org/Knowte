@@ -104,11 +104,9 @@ jobs:
         run: echo "WHISPER_DONT_GENERATE_BINDINGS=1" >> "$GITHUB_ENV"
 
       # ── Build & package with Tauri ─────────────────────────────────────────
-      # Use `npx tauri` instead of `bun tauri` — npx invokes the CLI binary
-      # from node_modules/.bin directly, bypassing package.json scripts
-      # (the shell script doesn't work on Windows). Explicit --bundles per
-      # platform prevents the action from injecting `--bundles all` which is
-      # invalid in Tauri v2.
+      # Use `bunx tauri` — invokes the @tauri-apps/cli binary directly,
+      # bypassing package.json scripts. Explicit --bundles per platform
+      # prevents the action from injecting `--bundles all` (invalid in Tauri v2).
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -119,7 +117,7 @@ jobs:
           releaseName: "Knowte ${{ github.ref_name }}"
           releaseBody: |
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md) for details.
-          tauriScript: 'npx tauri'
+          tauriScript: 'bunx tauri'
           args: ${{ matrix.args }}
           releaseDraft: ${{ github.event.inputs.draft || 'true' }}
           prerelease: false
