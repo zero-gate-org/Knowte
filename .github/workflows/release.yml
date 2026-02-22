@@ -87,5 +87,3 @@ jobs:
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md) for details.
           releaseDraft: ${{ github.event.inputs.draft || 'true' }}
           prerelease: false
-          # Produce all formats for each platform
-          args: --bundles all
