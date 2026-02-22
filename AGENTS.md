@@ -178,7 +178,7 @@ knowte/
 |------|--------|
 | 1.1 Tauri + React Scaffold | ✅ Complete |
 | 1.2 Settings + Ollama Health Check | ✅ Complete |
-| 1.3 Audio Upload + Mic Recording | 🔲 Pending |
+| 1.3 Audio Upload + Mic Recording | ✅ Complete |
 | 2.1 Whisper Integration | ✅ Complete |
 | 2.2 Transcript Editing | ✅ Complete |
 | 3.1 Prompt Templates + Ollama Client | ✅ Complete |
