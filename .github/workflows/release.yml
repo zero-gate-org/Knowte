@@ -21,10 +21,13 @@ jobs:
         include:
           - os: ubuntu-22.04
             name: Linux
+            args: '--bundles deb appimage'
           - os: windows-latest
             name: Windows
+            args: '--bundles nsis msi'
           - os: macos-latest
             name: macOS
+            args: '--bundles dmg'
             # Disable ggml native ARM feature probing — GitHub's Apple Silicon
             # runners don't support i8mm at runtime, causing a compile error when
             # ggml enables MATMUL_INT8 via its compile-time probe but then emits
@@ -57,8 +60,9 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          # Remove the legacy indicator lib if present — it conflicts with ayatana
-          sudo apt-get remove -y libappindicator3-dev || true
+          # Purge the legacy appindicator packages — they conflict with ayatana
+          sudo apt-get purge -y libappindicator3-dev libappindicator3-1 gir1.2-appindicator3-0.1 || true
+          sudo apt-get autoremove -y || true
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev \
@@ -100,24 +104,22 @@ jobs:
         run: echo "WHISPER_DONT_GENERATE_BINDINGS=1" >> "$GITHUB_ENV"
 
       # ── Build & package with Tauri ─────────────────────────────────────────
+      # Use `npx tauri` instead of `bun tauri` — npx invokes the CLI binary
+      # from node_modules/.bin directly, bypassing package.json scripts
+      # (the shell script doesn't work on Windows). Explicit --bundles per
+      # platform prevents the action from injecting `--bundles all` which is
+      # invalid in Tauri v2.
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MACOSX_DEPLOYMENT_TARGET: '11.0'
-          NODE_ENV: production
-          # macOS code signing (optional — remove if not signing)
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Knowte ${{ github.ref_name }}"
           releaseBody: |
             See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md) for details.
-          tauriScript: 'bun tauri'
+          tauriScript: 'npx tauri'
+          args: ${{ matrix.args }}
           releaseDraft: ${{ github.event.inputs.draft || 'true' }}
           prerelease: false
