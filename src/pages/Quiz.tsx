@@ -136,7 +136,7 @@ export default function Quiz() {
     return (
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
-          title="Interactive Quiz"
+          title="Quiz"
           description="Practice key concepts from your knowte."
         />
         <EmptyState reason="no-lecture" />
@@ -148,7 +148,7 @@ export default function Quiz() {
     return (
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
-          title="Interactive Quiz"
+          title="Quiz"
           description="Practice key concepts from your knowte."
         />
         <QuizSkeleton />
@@ -160,7 +160,7 @@ export default function Quiz() {
     return (
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
-          title="Interactive Quiz"
+          title="Quiz"
           description="Practice key concepts from your knowte."
         />
         <div className="bg-[var(--color-error-muted)] border border-[var(--color-error-muted)] rounded-lg p-4 text-[var(--color-error)] text-sm">
@@ -181,7 +181,7 @@ export default function Quiz() {
     return (
       <div className="mx-auto max-w-[900px] space-y-6">
         <ViewHeader
-          title="Interactive Quiz"
+          title="Quiz"
           description="Practice key concepts from your knowte."
           actions={
             <button
@@ -209,7 +209,7 @@ export default function Quiz() {
   return (
     <div className="mx-auto max-w-[900px] space-y-6">
       <ViewHeader
-        title="Interactive Quiz"
+        title="Quiz"
         description={`${quiz.questions.length} question${quiz.questions.length !== 1 ? "s" : ""}`}
         actions={
           !showResults ? (

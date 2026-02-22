@@ -235,9 +235,16 @@ function InnerCanvas({ data }: { data: MindMapData }) {
 
   // ─── Export helpers ──────────────────────────────────────────────────────
 
-  /** Filter function that excludes UI chrome (toolbar, hint bar) from exports. */
+  /** Filter function that excludes UI chrome (toolbar, hint bar, controls, minimap) from exports. */
   const exportFilter = useCallback((node: HTMLElement) => {
-    return node.dataset?.exportExclude !== "true";
+    if (node.dataset?.exportExclude === "true") return false;
+    const cls = node.classList;
+    if (
+      cls?.contains("react-flow__controls") ||
+      cls?.contains("react-flow__minimap") ||
+      cls?.contains("react-flow__panel")
+    ) return false;
+    return true;
   }, []);
 
   const downloadPng = useCallback(async () => {

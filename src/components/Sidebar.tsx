@@ -324,6 +324,18 @@ export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps)
                 {!isCollapsed && <span>Compare</span>}
               </NavLink>
             </li>
+
+            <li>
+              <NavLink
+                to="/settings"
+                role="tab"
+                title="Settings"
+                className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
+              >
+                <NavIcon name="settings" />
+                {!isCollapsed && <span>Settings</span>}
+              </NavLink>
+            </li>
           </ul>
         ) : (
           <ul className="space-y-0.5">
