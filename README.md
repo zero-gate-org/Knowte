@@ -1,6 +1,6 @@
 # Knowte
 
-![Knowte Logo](Knowte.png)
+![Knowte Logo](public/Knowte.png)
 
 **Transform lecture audio into structured learning materials — completely private, fully offline.**
 
@@ -8,9 +8,9 @@ Knowte is a desktop application that turns lecture recordings into structured no
 
 ---
 
-## Screenshots
+## Demo
 
-> _Screenshots coming soon. Run `bun run tauri dev` to see Knowte in action._
+![Knowte Demo](public/Knowte.gif)
 
 ---
 
