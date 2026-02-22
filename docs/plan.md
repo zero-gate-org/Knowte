@@ -1914,6 +1914,672 @@ ACCESSIBILITY CHECK:
 
 ---
 
+## PHASE 10: Future Feature Ideas
+
+**Goal: Extended capabilities for power users and advanced learning workflows.**
+
+---
+
+### Task 10.1 — Speaker Diarization
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Implement speaker diarization to identify different speakers in multi-person lectures.
+
+BACKEND (src-tauri/src/commands/diarize.rs):
+- Integrate a speaker diarization model (e.g., pyannote.audio or resemblyzer)
+- Tauri command `diarize_audio(lecture_id: String)` that:
+  - Processes the audio file with speaker embedding extraction
+  - Returns speaker segments: [{ speaker_id, start, end }]
+  - Assigns labels like "Speaker A", "Speaker B" or identifies speaker changes
+- Save speaker segments to database alongside transcript
+
+FRONTEND (src/components/Transcript/):
+- Update TranscriptViewer to display speaker labels per segment
+- Color-code different speakers in the transcript view
+- Allow user to rename speakers (e.g., "Prof. Smith", "Student 1")
+
+DATABASE:
+- Add speakers table: (id, lecture_id, label, color)
+- Update transcripts table to link to speaker segments
+
+Acceptance Criteria:
+- [ ] Multi-speaker audio identifies distinct speakers
+- [ ] Speaker labels display in transcript view
+- [ ] Users can rename speaker labels
+- [ ] Speaker info persists in database
+```
+
+---
+
+### Task 10.2 — Real-time Live Transcription
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add real-time transcription display during live lecture recording.
+
+BACKEND (src-tauri/src/commands/realtime_transcribe.rs):
+- Modify recording to use chunked audio buffer
+- Stream audio chunks to Whisper for incremental transcription
+- Emit real-time transcript events: app.emit("realtime-transcript", { text, is_final })
+- Tauri command `start_realtime_transcription(recording_id: String)`
+- Tauri command `stop_realtime_transcription()`
+
+FRONTEND (src/components/Upload/LiveRecorder.tsx):
+- Add "Live Transcript" panel that shows transcript in real-time
+- Display partial results with subtle styling
+- Show final segments with confirmed styling
+- Auto-scroll as new transcript appears
+- Toggle between waveform and live transcript views
+
+Acceptance Criteria:
+- [ ] Transcript appears within 2-3 seconds of speech
+- [ ] Partial (in-progress) text shown differently from final
+- [ ] Recording continues smoothly with transcription running
+- [ ] Final transcript matches full post-processing
+```
+
+---
+
+### Task 10.3 — Audio Enhancement Pipeline
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build audio preprocessing pipeline to improve transcription quality.
+
+BACKEND (src-tauri/src/commands/audio_enhance.rs):
+- Tauri command `enhance_audio(lecture_id: String, options: EnhanceOptions)`:
+  - Noise reduction using noise-profil e or RNNoise
+  - Audio normalization/leveling
+  - Bandpass filtering (300Hz - 3400Hz for voice)
+  - Optional: remove silence, reduce reverb
+- Process audio before Whisper transcription
+- Return enhanced audio path for transcription
+
+FRONTEND (src/components/Upload/):
+- Add "Enhance Audio" toggle in upload/processing options
+- Show before/after waveform comparison
+- Allow user to enable/disable specific enhancement options
+
+Acceptance Criteria:
+- [ ] Noisy audio produces cleaner transcription
+- [ ] Audio levels normalized across long recordings
+- [ ] User can enable/disable enhancements
+- [ ] Original audio preserved, enhanced is separate file
+```
+
+---
+
+### Task 10.4 — Batch Lecture Processing
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Implement queue system for processing multiple lectures sequentially.
+
+BACKEND (src-tauri/src/commands/batch.rs):
+- Tauri command `queue_lecture(lecture_ids: String[])`:
+  - Add lectures to processing queue
+  - Return queue position and estimated time
+- Tauri command `get_queue_status()`:
+  - Return queue state: [{ lecture_id, status, progress }]
+- Tauri command `pause_queue()` / `resume_queue()`
+- Process queue in background with configurable concurrency
+
+FRONTEND (src/components/Pipeline/):
+- Add "Batch Process" button in Library view
+- Multi-select lectures for batch processing
+- Queue management UI: reorder, pause, cancel
+- Desktop notification when batch completes
+- Progress shown in system tray
+
+Acceptance Criteria:
+- [ ] Can queue 10+ lectures for overnight processing
+- [ ] Queue status visible in UI
+- [ ] Can pause/resume/cancel queue items
+- [ ] Notifications on completion
+```
+
+---
+
+### Task 10.5 — Global Search
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build full-text search across all lectures, transcripts, notes, and quizzes.
+
+BACKEND (src-tauri/src/commands/search.rs):
+- Integrate SQLite FTS5 for full-text search
+- Index: transcripts, notes (JSON), quiz questions, flashcards
+- Tauri command `search(query: String, filters: SearchFilters)`:
+  - Returns: [{ type, lecture_id, title, snippet, score }]
+- Tauri command `rebuild_search_index()` for manual rebuild
+
+FRONTEND (src/components/):
+- Global search modal (Cmd/Ctrl+K to open)
+- Search input with instant results
+- Filter by: type (transcript/notes/quiz/flashcards), date, topic
+- Click result navigates to relevant view
+- Highlight matching text in results
+
+Acceptance Criteria:
+- [ ] Search finds content across all lecture data
+- [ ] Results appear within 200ms
+- [ ] Filters narrow results correctly
+- [ ] Click navigates to correct location
+```
+
+---
+
+### Task 10.6 — Additional Export Formats
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add PDF, DOCX, and PPTX export options.
+
+BACKEND (src-tauri/src/commands/export.rs):
+- Add export formats: PDF, DOCX, HTML, CSV
+- Tauri command `export_lecture(lecture_id: String, format: ExportFormat)`:
+  - PDF: Use printpdf or html-to-pdf crate
+  - DOCX: Use docx-rs crate  
+  - CSV: For flashcard/quiz data
+- Return exported file path
+
+FRONTEND (src/components/Notes/NotesExport.tsx):
+- Add format dropdown: Markdown (current), PDF, DOCX, HTML
+- Add export options per format:
+  - PDF: Include/exclude images, page size
+  - DOCX: Template selection
+- Progress indicator for large exports
+- Open exported file or reveal in folder
+
+Acceptance Criteria:
+- [ ] PDF export renders notes correctly
+- [ ] DOCX opens in Word with formatting intact
+- [ ] HTML export works as standalone file
+- [ ] Flashcards export to CSV for spreadsheet use
+```
+
+---
+
+### Task 10.7 — Third-party Note-taking Integration
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add export/sync to Notion, Obsidian, and other platforms.
+
+BACKEND (src-tauri/src/commands/integrations.rs):
+- Tauri command `export_to_notion(lecture_id: String, api_key: String)`:
+  - Create Notion page with transcript, notes as blocks
+  - Use Notion API client
+- Tauri command `export_to_obsidian(vault_path: String)`:
+  - Create markdown files in Obsidian vault format
+  - Frontmatter with metadata
+- Tauri command `export_to_evernote(lecture_id: String)`
+
+FRONTEND (src/components/Settings/):
+- Add "Integrations" section in Settings
+- Configure API keys (Notion, Evernote)
+- Set default export path for Obsidian
+- Test connection button for each service
+- Per-lecture export to any connected service
+
+DATABASE:
+- Store integration credentials (encrypted)
+- Track sync status per lecture
+
+Acceptance Criteria:
+- [ ] Export to Notion creates proper page structure
+- [ ] Obsidian export creates valid vault with frontmatter
+- [ ] Credentials stored securely
+- [ ] Re-sync updates existing notes
+```
+
+---
+
+### Task 10.8 — Presentation Mode
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build full-screen presentation mode for notes and mind maps.
+
+FRONTEND (src/components/Presentation/):
+- PresentationMode.tsx:
+  - Full-screen overlay with black background
+  - Notes rendered as slide-like sections
+  - Mind map with zoom/pan controls
+- Navigation: Arrow keys, spacebar, click
+- Timer overlay for study sessions
+- Spotlight mode (highlight current section, dim rest)
+- Export presentation as PDF slides
+
+TYPES (src/lib/types.ts):
+  PresentationSettings {
+    showTimer: boolean;
+    timerDuration: number;
+    spotlightMode: boolean;
+    autoAdvance: boolean;
+  }
+
+Acceptance Criteria:
+- [ ] Enter presentation mode from notes/mindmap
+- [ ] Arrow keys navigate between sections
+- [ ] Timer displays and counts down
+- [ ] Spotlight mode highlights current content
+- [ ] ESC exits presentation mode
+```
+
+---
+
+### Task 10.9 — Voice Commands
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Implement voice command recognition for hands-free operation.
+
+BACKEND (src-tauri/src/commands/voice.rs):
+- Integrate Vosk or Whisper for command recognition
+- Tauri command `start_voice_commands()`:
+  - Listen for wake word "Hey Knowte" or custom
+  - Recognize commands: start recording, stop, next slide, etc.
+- Emit voice command events to frontend
+- Configurable command vocabulary
+
+FRONTEND (src/components/Settings/):
+- VoiceSettings.tsx:
+  - Enable/disable voice commands
+  - Custom wake word configuration
+  - Command vocabulary display
+  - Microphone selection
+
+FRONTEND (src/hooks/):
+- useVoiceCommands.ts:
+  - Listen for voice command events
+  - Execute corresponding actions
+  - Visual indicator when listening
+
+Acceptance Criteria:
+- [ ] Wake word activates voice listening
+- [ ] Basic commands recognized: start/stop, next, previous
+- [ ] Voice status indicator in UI
+- [ ] Works with external microphones
+- [ ] Can disable via settings
+```
+
+---
+
+### Task 10.10 — Lecture Chapter Generation
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Automatically detect topic changes and generate chapter markers.
+
+BACKEND (src-tauri/src/commands/chapters.rs):
+- Use LLM to analyze transcript for topic transitions
+- Tauri command `generate_chapters(lecture_id: String)`:
+  - Analyze transcript segments
+  - Identify natural breaks/topics
+  - Return: [{ title, start_time, end_time, summary }]
+- Save chapters to database
+
+FRONTEND (src/components/Transcript/):
+- Update TranscriptViewer with chapter sidebar
+- Chapter markers in timeline view
+- Click chapter to jump to timestamp
+- Edit chapter titles manually
+- Drag to reorder chapters
+
+DATABASE:
+- Add chapters table: (id, lecture_id, title, start_time, end_time, summary)
+
+Acceptance Criteria:
+- [ ] Auto-generates 3-8 chapters per lecture
+- [ ] Chapters display in sidebar timeline
+- [ ] Click navigates to correct time
+- [ ] User can edit chapter titles
+- [ ] Chapters persist across sessions
+```
+
+---
+
+### Task 10.11 — Key Moment Bookmarking
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add timestamp-based bookmarking with annotations.
+
+BACKEND (src-tauri/src/commands/bookmarks.rs):
+- Tauri command `add_bookmark(lecture_id: String, time: f64, note: String)`
+- Tauri command `get_bookmarks(lecture_id: String)`
+- Tauri command `update_bookmark(bookmark_id, note: String)`
+- Tauri command `delete_bookmark(bookmark_id)`
+
+FRONTEND (src/components/Transcript/):
+- Add bookmark button in audio player
+- Click timestamp to add quick bookmark
+- Bookmark panel showing all bookmarks for lecture
+- Add notes to bookmarks
+- Export bookmarks as markdown
+
+DATABASE:
+- Add bookmarks table: (id, lecture_id, timestamp, note, created_at)
+
+Acceptance Criteria:
+- [ ] Add bookmark at current playback time
+- [ ] Bookmarks display in list panel
+- [ ] Click bookmark jumps to timestamp
+- [ ] Can add/edit notes on bookmarks
+- [ ] Bookmarks exportable
+```
+
+---
+
+### Task 10.12 — Spaced Repetition Analytics
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Implement spaced repetition scheduling and learning analytics.
+
+BACKEND (src-tauri/src/commands/spaced_repetition.rs):
+- Implement SM-2 or similar algorithm
+- Tauri command `record_quiz_result(flashcard_id, quality: number)`:
+  - Update next review date based on performance
+- Tauri command `get_due_reviews()`:
+  - Return flashcards due for review today
+- Tauri command `get_learning_stats(lecture_id)`:
+  - Return: { total_reviewed, accuracy, streak_days, next_review }
+
+FRONTEND (src/components/Flashcards/):
+- Add review mode with SM-2 buttons: Again, Hard, Good, Easy
+- Show next review date per card
+- Add "Review Due" badge in sidebar
+- Learning dashboard with:
+  - Review streak calendar
+  - Accuracy over time chart
+  - Time spent studying
+
+DATABASE:
+- Update flashcards table: (next_review, interval, ease_factor)
+- Add review_history table
+
+Acceptance Criteria:
+- [ ] SM-2 algorithm schedules reviews correctly
+- [ ] Due cards highlighted in UI
+- [ ] Learning stats dashboard displays
+- [ ] Review history persists
+- [ ] Mobile companion can sync reviews
+```
+
+---
+
+### Task 10.13 — AI Study Companion
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build AI-powered study planning and recommendations.
+
+BACKEND (src-tauri/src/commands/study_companion.rs):
+- Analyze quiz performance to identify weak areas
+- Tauri command `get_study_recommendations(lecture_ids: String[])`:
+  - Return prioritized topics to review
+  - Suggested study time per topic
+- Tauri command `generate_study_plan(lecture_ids, days: number)`:
+  - Create day-by-day study schedule
+  - Balance across topics based on performance
+- Tauri command `get_progress_report(lecture_ids)`:
+  - Comprehensive learning report
+
+FRONTEND (src/pages/):
+- StudyCompanion.tsx:
+  - Dashboard with progress overview
+  - Weak areas highlighted
+  - Study plan calendar view
+  - Daily/weekly goals
+
+Acceptance Criteria:
+- [ ] Identifies topics needing review from quiz data
+- [ ] Generates multi-day study plan
+- [ ] Shows progress over time
+- [ ] Recommendations update after quiz attempts
+- [ ] Exportable study plan
+```
+
+---
+
+### Task 10.14 — Lecture Comparison Tool
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build side-by-side comparison view for two lectures.
+
+FRONTEND (src/pages/):
+- Compare.tsx:
+  - Select two lectures from dropdowns
+  - Side-by-side transcript view
+  - Synchronized scrolling option
+  - Highlight matching content
+  - Show differences/similarities
+
+BACKEND (src-tauri/src/commands/compare.rs):
+- Tauri command `compare_lectures(lecture_id_1, lecture_id_2)`:
+  - Use embeddings to find similar content
+  - Return: [{ topic, overlap_score, lecture1_snippet, lecture2_snippet }]
+
+Acceptance Criteria:
+- [ ] Can select any two lectures
+- [ ] Transcripts display side-by-side
+- [ ] Similar content highlighted
+- [ ] Can filter by topics
+- [ ] Export comparison report
+```
+
+---
+
+### Task 10.15 — Mobile Companion App
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build companion mobile app for iOS/Android with sync.
+
+This is a larger undertaking - outline the architecture:
+
+MOBILE APP (separate project in /mobile/):
+- Framework: React Native with Expo
+- Features:
+  - View flashcards and quizzes
+  - Sync progress from desktop
+  - Record audio on mobile (syncs to desktop)
+  - Push notifications for review reminders
+- Authentication: Local encryption key shared via QR code
+- Sync: Local-first, sync when online
+
+BACKEND (src-tauri/src/commands/sync.rs):
+- Tauri command `generate_sync_qr()`: Returns sync credentials
+- Tauri command `sync_with_mobile(device_id)`: Bidirectional sync
+- Conflict resolution: Last-write-wins with merge for flashcards
+
+DATABASE:
+- Add device table for mobile device registration
+- Add sync_log for audit trail
+
+Acceptance Criteria:
+- [ ] Mobile app can view desktop flashcards
+- [ ] Quiz progress syncs
+- [ ] Mobile recordings appear in desktop library
+- [ ] QR code pairing works
+- [ ] Offline-first with background sync
+```
+
+---
+
+### Task 10.16 — Plugin/Extension System
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Build plugin system for third-party extensions.
+
+PLUGIN API (src/lib/pluginApi.ts):
+- Define plugin interface:
+  ```
+  interface KnowtePlugin {
+    id: string;
+    name: string;
+    version: string;
+    onTranscript?: (transcript) => Promise<PluginResult>;
+    onNotes?: (notes) => Promise<PluginResult>;
+    onExport?: (format, data) => Promise<PluginResult>;
+    settings?: PluginSettings;
+  }
+  ```
+
+BACKEND (src-tauri/src/commands/plugins.rs):
+- Tauri command `load_plugins()`: Load from plugins/ directory
+- Tauri command `install_plugin(plugin_zip_path)`
+- Tauri command `unload_plugin(plugin_id)`
+- Sandboxed execution for plugins
+
+FRONTEND (src/components/Settings/):
+- PluginManager.tsx:
+  - List installed plugins
+  - Enable/disable plugins
+  - Plugin settings panel
+  - Install from file
+
+Acceptance Criteria:
+- [ ] Plugins load from directory
+- [ ] Plugin UI appears in settings
+- [ ] Can enable/disable plugins
+- [ ] Plugin hooks execute at right times
+- [ ] Plugins are sandboxed
+```
+
+---
+
+### Task 10.17 — Multi-language UI (i18n)
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add internationalization support for the UI.
+
+FRONTEND:
+- Integrate react-i18next
+- Create translation files: /src/locales/{lang}/translation.json
+- Languages to support initially:
+  - English (en) - default
+  - Spanish (es)
+  - French (fr)
+  - German (de)
+  - Chinese Simplified (zh)
+  - Japanese (ja)
+- Add language selector in Settings
+- Persist language preference
+
+STRUCTURE:
+```
+src/locales/
+├── en/translation.json
+├── es/translation.json
+├── fr/translation.json
+├── de/translation.json
+├── zh/translation.json
+└── ja/translation.json
+```
+
+COMPONENT UPDATES:
+- Replace all hardcoded strings with t() function
+- Format dates/numbers with locale
+- RTL support ready (for future Arabic/Hebrew)
+
+Acceptance Criteria:
+- [ ] Language selector in Settings
+- [ ] All UI text translatable
+- [ ] 6 languages available
+- [ ] Language persists across sessions
+- [ ] Dates format per locale
+```
+
+---
+
+### Task 10.18 — Optional Cloud Backup
+
+```
+PROMPT FOR AGENT:
+─────────────────
+Add optional end-to-end encrypted cloud backup.
+
+BACKEND (src-tauri/src/commands/backup.rs):
+- Tauri command `configure_backup(provider, credentials)`:
+  - Support S3-compatible storage (AWS, Backblaze, MinIO)
+  - Credentials stored encrypted locally
+- Tauri command `create_backup()`:
+  - Export database + media to encrypted zip
+  - Upload to configured provider
+- Tauri command `restore_backup(backup_id)`:
+  - Download and decrypt backup
+  - Merge with local data
+- Tauri command `list_backups()`
+- Encryption: AES-256-GCM with user-provided key
+
+FRONTEND (src/components/Settings/):
+- BackupSettings.tsx:
+  - Configure S3-compatible endpoint
+  - Enter encryption key (shown once)
+  - Manual backup button
+  - Auto-backup schedule (daily/weekly)
+  - Restore from backup UI
+  - Backup history list
+
+Acceptance Criteria:
+- [ ] Can configure S3-compatible storage
+- [ ] Backups are encrypted before upload
+- [ ] Can restore from any backup point
+- [ ] Auto-backup works on schedule
+- [ ] Encryption key never leaves device
+```
+
+---
+
+## Current Progress
+
+| Task | Status |
+|------|--------|
+| 1.1 Tauri + React Scaffold | ✅ Complete |
+| 1.2 Settings + Ollama Health Check | ✅ Complete |
+| 1.3 Audio Upload + Mic Recording | ✅ Complete |
+| 2.1 Whisper Integration | ✅ Complete |
+| 2.2 Transcript Editing | ✅ Complete |
+| 3.1 Prompt Templates + Ollama Client | ✅ Complete |
+| 3.2 Pipeline Orchestrator | ✅ Complete |
+| 3.3 Semantic Scholar Integration | ✅ Complete |
+| 4.1 Structured Notes View | ✅ Complete |
+| 4.2 Interactive Quiz | ✅ Complete |
+| 4.3 Mind Map Visualization | ✅ Complete |
+| 4.4 Flashcards + Anki Export | ✅ Complete |
+| 5.x Lecture Library | ✅  Complete |
+| 6.x Polish | ✅  Complete |
+| 7.x Advanced Features | ✅  Complete |
+| 8.x Distribution | ✅  Complete |
+| 9.x Custom Theming System | 🔲 In Progress |
+| 10.x Future Feature Ideas | 🔲 Planned |
+
+---
+
 ## Dependency Summary
 
 ```toml
