@@ -2,6 +2,12 @@
 
 All notable changes to the Knowte project will be documented in this file.
 
+## GitHub Pages Deployment - 2026-02-23
+- Added: GitHub Action workflow to deploy the landing page from the `landing/` directory.
+- Features: Automatic build of Tailwind CSS assets and deployment to GitHub Pages on every push to the `main` branch.
+- Files modified:
+  - .github/workflows/deploy-landing.yml
+
 ## File Organization - 2026-02-22
 - Moved: CONTRIBUTING.md, CHANGELOG.md, plan.md, LICENSE to docs/ folder
 - Updated: All references to these files in README.md, AGENTS.md, .github/workflows/release.yml, and docs/CONTRIBUTING.md
