@@ -64,6 +64,10 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
+      # ── Make scripts executable ───────────────────────────────────────────
+      - name: Make scripts executable
+        run: chmod +x scripts/tauri-safe.sh
+
       # ── Build & package with Tauri ─────────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
