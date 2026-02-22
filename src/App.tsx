@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   BrowserRouter,
   Navigate,
@@ -13,8 +14,8 @@ import { ToastViewport } from "./components/Toast";
 import { useHotkeys } from "./hooks";
 import { HOTKEY_EVENT_NAMES, LECTURE_VIEW_SHORTCUTS } from "./lib/hotkeys";
 import { listLectures } from "./lib/tauriApi";
-import type { Lecture, LectureSummary, Settings, ThemeMode } from "./lib/types";
-import { useLectureStore, useSettingsStore, useToastStore, useUiStore } from "./stores";
+import type { Lecture, LectureSummary, LlmStreamEvent, PipelineStageEvent, Settings, ThemeMode } from "./lib/types";
+import { useLectureStore, usePipelineStore, useSettingsStore, useToastStore, useUiStore } from "./stores";
 import "./index.css";
 
 const Upload = lazy(() => import("./pages/Upload"));
@@ -118,6 +119,30 @@ function AppLayout() {
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [isThemeSaving, setIsThemeSaving] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+
+  // ── Global pipeline event listeners ─────────────────────────────────────────
+  // These listeners live for the entire app lifetime so pipeline progress is
+  // captured in the Zustand store regardless of which page is currently mounted.
+  useEffect(() => {
+    if (!isDesktop) return;
+
+    const unlisteners: Array<() => void> = [];
+
+    void (async () => {
+      const unlistenStage = await listen<PipelineStageEvent>("pipeline-stage", (event) => {
+        usePipelineStore.getState().handleStageEvent(event.payload);
+      });
+      const unlistenStream = await listen<LlmStreamEvent>("llm-stream", (event) => {
+        usePipelineStore.getState().handleStreamEvent(event.payload);
+      });
+      unlisteners.push(unlistenStage, unlistenStream);
+    })();
+
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDesktop]);
 
   useEffect(() => {
     setCurrentLecture(extractLectureId(location.pathname));

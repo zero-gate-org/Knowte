@@ -15,6 +15,7 @@ import type {
   YoutubeImportProgress,
 } from "../../lib/types";
 import { useLectureStore, useToastStore } from "../../stores";
+import { usePipelineStore } from "../../stores/pipelineStore";
 import { ViewHeader } from "../Layout";
 import DropZone, { type UploadStageUpdate } from "./DropZone";
 import LiveRecorder from "./LiveRecorder";
@@ -629,6 +630,9 @@ export default function AudioUploader() {
           setProcessHint(
             `${estimateMessage} Running AI pipeline for ${filename} (${useCache ? "cache enabled" : "regenerating"}).`,
           );
+          // Reset the global pipeline store for this lecture so the Pipeline
+          // page shows a clean slate before any events arrive.
+          usePipelineStore.getState().initLecture(lectureId);
           await startPipelineWithOptions(lectureId, { useCache });
           await waitForPipelineCompletion(lectureId);
 

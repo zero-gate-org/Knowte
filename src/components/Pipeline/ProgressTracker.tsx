@@ -1,26 +1,13 @@
-import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   regenerateMindmap,
   regenerateNotes,
   regenerateQuiz,
   startPipeline,
 } from "../../lib/tauriApi";
-import type { LlmStreamEvent, PipelineStage, PipelineStageEvent } from "../../lib/types";
+import type { PipelineStage } from "../../lib/types";
 import { useToastStore } from "../../stores";
-
-// ─── Stage configuration ─────────────────────────────────────────────────────
-
-const PIPELINE_STAGES: { name: string; label: string }[] = [
-  { name: "summary", label: "Summarization" },
-  { name: "notes", label: "Structured Notes" },
-  { name: "quiz", label: "Quiz Questions" },
-  { name: "flashcards", label: "Flashcards" },
-  { name: "mindmap", label: "Mind Map" },
-  { name: "keywords", label: "Research Keywords" },
-];
-
-const TOTAL_STAGES = PIPELINE_STAGES.length;
+import { usePipelineStore, PIPELINE_STAGE_DEFS, TOTAL_PIPELINE_STAGES } from "../../stores/pipelineStore";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -165,7 +152,7 @@ function StageRow({
 
 interface ProgressTrackerProps {
   lectureId: string | null;
-  /** Called when all 6 stages have completed (or errored). */
+  /** Called once when all stages have completed or errored. */
   onPipelineComplete?: () => void;
   className?: string;
 }
@@ -176,185 +163,74 @@ export default function ProgressTracker({
   className,
 }: ProgressTrackerProps) {
   const pushToast = useToastStore((state) => state.pushToast);
-  const [stages, setStages] = useState<PipelineStage[]>(
-    PIPELINE_STAGES.map((s) => ({ ...s, status: "pending" as const })),
+
+  // ── Read live pipeline progress from the global store ─────────────────────
+  // The store is fed by global Tauri event listeners set up in App.tsx, so
+  // state persists across page navigation and is never lost when this
+  // component unmounts.
+  const lectureState = usePipelineStore(
+    (state) => (lectureId ? (state.lectureStates[lectureId] ?? null) : null),
   );
-  const [stagesComplete, setStagesComplete] = useState(0);
-  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
-  const [sectionProgress, setSectionProgress] = useState<
-    Record<
-      string,
-      {
-        total: number;
-        completed: number[];
-        running: number | null;
-      }
-    >
-  >({});
-  const [isDone, setIsDone] = useState(false);
-  const [pipelineWarning, setPipelineWarning] = useState<string | null>(null);
+  const { updateStageStatus, bumpStagesComplete } = usePipelineStore.getState();
+
+  // Only local state: the in-flight retry/skip action name (pure UI concern).
   const [stageActionName, setStageActionName] = useState<string | null>(null);
 
+  // Derive display values; fall back to default pending state when the store
+  // has no entry yet (e.g. very first render before any events arrive).
+  const stages =
+    lectureState?.stages ?? PIPELINE_STAGE_DEFS.map((s) => ({ ...s, status: "pending" as const }));
+  const stagesComplete = lectureState?.stagesComplete ?? 0;
+  const streamingTokens = lectureState?.streamingTokens ?? {};
+  const sectionProgress = lectureState?.sectionProgress ?? {};
+  const isDone = lectureState?.isDone ?? false;
+  const pipelineWarning = lectureState?.pipelineWarning ?? null;
+
+  // Fire onPipelineComplete once when isDone first flips to true for the
+  // current lectureId. We use a ref so there's no extra render cycle.
+  const completionFiredRef = useRef<{ lectureId: string | null; fired: boolean }>({
+    lectureId: null,
+    fired: false,
+  });
   useEffect(() => {
-    if (!lectureId) {
+    // Reset tracking whenever the lecture changes.
+    if (completionFiredRef.current.lectureId !== lectureId) {
+      completionFiredRef.current = { lectureId, fired: isDone };
       return;
     }
+    if (isDone && !completionFiredRef.current.fired) {
+      completionFiredRef.current.fired = true;
+      onPipelineComplete?.();
+    }
+  }, [lectureId, isDone, onPipelineComplete]);
 
-    // Reset on new lecture
-    setStages(PIPELINE_STAGES.map((s) => ({ ...s, status: "pending" as const })));
-    setStagesComplete(0);
-    setStreamingTokens({});
-    setSectionProgress({});
-    setIsDone(false);
-    setPipelineWarning(null);
-    setStageActionName(null);
+  if (!lectureId) return null;
 
-    const unlisteners: Array<() => void> = [];
-
-    const setup = async () => {
-      // Listen for pipeline-stage events
-      const unlistenStage = await listen<PipelineStageEvent>("pipeline-stage", (event) => {
-        const payload = event.payload;
-        if (payload.lecture_id !== lectureId) return;
-
-        if (payload.stage === "pipeline" && payload.status === "warning") {
-          setPipelineWarning(payload.error ?? "Results may be limited due to very short transcript.");
-          return;
-        }
-
-        if (payload.stage === "pipeline" && payload.status === "complete") {
-          setIsDone(true);
-          onPipelineComplete?.();
-          return;
-        }
-
-        const sectionMatch = payload.stage.match(/^(summary|notes|quiz)_(?:chunk|section)_(\d+)$/);
-        if (sectionMatch) {
-          const parentStage = sectionMatch[1];
-          const index = Number(sectionMatch[2]);
-          if (Number.isFinite(index) && index > 0) {
-            setSectionProgress((prev) => {
-              const current = prev[parentStage] ?? { total: 0, completed: [], running: null };
-              const nextCompleted = [...current.completed];
-              if (payload.status === "complete" && !nextCompleted.includes(index)) {
-                nextCompleted.push(index);
-              }
-              return {
-                ...prev,
-                [parentStage]: {
-                  total: Math.max(current.total, index),
-                  completed: nextCompleted,
-                  running: payload.status === "starting" ? index : current.running === index ? null : current.running,
-                },
-              };
-            });
-          }
-          return;
-        }
-
-        setStages((prev) =>
-          prev.map((s) => {
-            if (s.name !== payload.stage) return s;
-            return {
-              ...s,
-              status:
-                payload.status === "starting"
-                  ? "running"
-                  : (payload.status as PipelineStage["status"]),
-              preview: payload.preview,
-              error: payload.error,
-            };
-          }),
-        );
-
-        if (payload.stages_complete !== undefined) {
-          setStagesComplete(payload.stages_complete);
-        }
-
-        // Clear streaming buffer when stage finishes
-        if (payload.status === "complete" || payload.status === "error") {
-          setStreamingTokens((prev) => {
-            const next = { ...prev };
-            delete next[payload.stage];
-            return next;
-          });
-        }
-      });
-
-      // Listen for llm-stream tokens to show live output
-      const unlistenStream = await listen<LlmStreamEvent>("llm-stream", (event) => {
-        const payload = event.payload;
-        if (payload.lecture_id !== lectureId) return;
-        setStreamingTokens((prev) => ({
-          ...prev,
-          [payload.stage]: (prev[payload.stage] ?? "") + payload.token,
-        }));
-      });
-
-      unlisteners.push(unlistenStage, unlistenStream);
-    };
-
-    void setup();
-
-    return () => {
-      unlisteners.forEach((fn) => fn());
-    };
-  }, [lectureId, onPipelineComplete]);
-
-  if (!lectureId) {
-    return null;
-  }
-
-  const progressPercent = Math.round((stagesComplete / TOTAL_STAGES) * 100);
-
-  const updateStageStatus = (
-    stageName: string,
-    status: PipelineStage["status"],
-    preview?: string,
-    error?: string,
-  ) => {
-    setStages((prev) =>
-      prev.map((stage) =>
-        stage.name === stageName
-          ? {
-              ...stage,
-              status,
-              preview,
-              error,
-            }
-          : stage,
-      ),
-    );
-  };
+  const progressPercent = Math.round((stagesComplete / TOTAL_PIPELINE_STAGES) * 100);
 
   const stageIndex = (stageName: string) =>
-    PIPELINE_STAGES.findIndex((stage) => stage.name === stageName);
+    PIPELINE_STAGE_DEFS.findIndex((s) => s.name === stageName);
 
+  // ── Retry ─────────────────────────────────────────────────────────────────
   const handleRetryStage = async (stageName: string) => {
     if (!lectureId || stageActionName) return;
 
     setStageActionName(stageName);
-    updateStageStatus(stageName, "running", undefined, undefined);
+    updateStageStatus(lectureId, stageName, "running", undefined, undefined);
 
     try {
       if (stageName === "notes") {
         const notes = await regenerateNotes(lectureId);
-        if (!notes) {
-          throw new Error("No notes data returned.");
-        }
-        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+        if (!notes) throw new Error("No notes data returned.");
+        updateStageStatus(lectureId, stageName, "complete", "Stage retried successfully.");
       } else if (stageName === "quiz") {
         const quiz = await regenerateQuiz(lectureId);
-        if (!quiz) {
-          throw new Error("No quiz data returned.");
-        }
-        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+        if (!quiz) throw new Error("No quiz data returned.");
+        updateStageStatus(lectureId, stageName, "complete", "Stage retried successfully.");
       } else if (stageName === "mindmap") {
         const mindmap = await regenerateMindmap(lectureId);
-        if (!mindmap) {
-          throw new Error("No mind map data returned.");
-        }
-        updateStageStatus(stageName, "complete", "Stage retried successfully.");
+        if (!mindmap) throw new Error("No mind map data returned.");
+        updateStageStatus(lectureId, stageName, "complete", "Stage retried successfully.");
       } else {
         await startPipeline(lectureId);
         pushToast({
@@ -364,25 +240,22 @@ export default function ProgressTracker({
       }
 
       const index = stageIndex(stageName);
-      if (index >= 0) {
-        setStagesComplete((current) => Math.max(current, index + 1));
-      }
+      if (index >= 0) bumpStagesComplete(lectureId, index + 1);
       pushToast({ kind: "success", message: `Retried "${stageName}" stage.` });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      updateStageStatus(stageName, "error", undefined, message);
+      updateStageStatus(lectureId, stageName, "error", undefined, message);
       pushToast({ kind: "error", message: `Failed to retry "${stageName}": ${message}` });
     } finally {
       setStageActionName(null);
     }
   };
 
+  // ── Skip ──────────────────────────────────────────────────────────────────
   const handleSkipStage = (stageName: string) => {
-    updateStageStatus(stageName, "complete", "Skipped by user.", undefined);
+    updateStageStatus(lectureId, stageName, "complete", "Skipped by user.");
     const index = stageIndex(stageName);
-    if (index >= 0) {
-      setStagesComplete((current) => Math.max(current, index + 1));
-    }
+    if (index >= 0) bumpStagesComplete(lectureId, index + 1);
     pushToast({ kind: "warning", message: `Skipped "${stageName}" stage.` });
   };
 
