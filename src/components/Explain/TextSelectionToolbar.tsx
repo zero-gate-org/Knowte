@@ -28,7 +28,7 @@ export default function TextSelectionToolbar({
     <div
       role="toolbar"
       aria-label="Selected text actions"
-      className="fixed z-[70] -translate-x-1/2 -translate-y-full rounded-xl border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 p-1.5 shadow-2xl backdrop-blur"
+      className="print:hidden fixed z-[70] -translate-x-1/2 -translate-y-full rounded-xl border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 p-1.5 shadow-2xl backdrop-blur"
       style={{ left: position.left, top: position.top }}
       onMouseDown={(event) => event.preventDefault()}
     >

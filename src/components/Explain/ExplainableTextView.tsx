@@ -490,7 +490,7 @@ export default function ExplainableTextView({
         <button
           type="button"
           onClick={() => setIsPanelOpen(true)}
-          className="fixed right-0 top-1/2 z-[60] -translate-y-1/2 rounded-l-lg border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 px-2 py-2 text-[11px] font-medium text-[var(--text-secondary)] shadow-lg transition-colors hover:bg-[var(--bg-elevated)]"
+          className="print:hidden fixed right-0 top-1/2 z-[60] -translate-y-1/2 rounded-l-lg border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 px-2 py-2 text-[11px] font-medium text-[var(--text-secondary)] shadow-lg transition-colors hover:bg-[var(--bg-elevated)]"
         >
           Explain Panel
         </button>

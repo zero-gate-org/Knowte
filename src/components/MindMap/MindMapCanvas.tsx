@@ -23,12 +23,22 @@ import type { MindMapData, MindMapNode } from "../../lib/types";
 
 // ─── Node size / colour per depth ─────────────────────────────────────────────
 
-const NODE_DIMS = [
-  { width: 200, height: 64 },  // root (level 0)
-  { width: 172, height: 52 },  // level 1
-  { width: 148, height: 44 },  // level 2
-  { width: 128, height: 40 },  // level 3+
-];
+const NODE_MAX_WIDTHS = [220, 190, 168, 148]; // max width per depth level
+
+/** Estimate node dimensions based on label text so dagre can allocate correct space. */
+function estimateNodeDims(label: string, level: number): { width: number; height: number } {
+  const fontSizes = [15, 13, 12, 11];
+  const lvl = Math.min(level, 3);
+  const width = NODE_MAX_WIDTHS[lvl];
+  const fontSize = fontSizes[lvl];
+  const charWidth = fontSize * 0.58; // average character width ratio
+  const lineHeight = fontSize * 1.45;
+  const paddingV = 16; // top + bottom padding in px
+  const charsPerLine = Math.floor((width - 24) / charWidth); // subtract horizontal padding
+  const lines = Math.max(1, Math.ceil(label.length / charsPerLine));
+  const height = Math.ceil(lines * lineHeight + paddingV);
+  return { width, height };
+}
 
 const NODE_STYLES: Record<number, React.CSSProperties> = {
   0: { background: "var(--accent-primary)", border: "2px solid var(--accent-secondary)", color: "#fff", fontSize: 15, fontWeight: 700, borderRadius: 12,  boxShadow: "0 4px 20px var(--accent-glow)" },
@@ -55,13 +65,15 @@ function MindMapNodeComp({ data, isConnectable }: NodeProps) {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "4px 12px",
+    padding: "8px 12px",
     width: "100%",
-    height: "100%",
+    minHeight: "100%",
     boxSizing: "border-box",
-    lineHeight: 1.3,
+    lineHeight: 1.45,
     textAlign: "center",
     wordBreak: "break-word",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
     cursor: "pointer",
   };
 
@@ -87,15 +99,15 @@ function flattenTree(
   edges: Edge[],
   parentId: string | null,
 ): void {
-  const dimIdx = Math.min(level, NODE_DIMS.length - 1);
+  const { width, height } = estimateNodeDims(node.label, level);
   nodes.push({
     id: node.id,
     type: "mindmap",
     data: { label: node.label, level, highlighted: true } as unknown as Record<string, unknown>,
     position: { x: 0, y: 0 },
-    width: NODE_DIMS[dimIdx].width,
-    height: NODE_DIMS[dimIdx].height,
-    style: { width: NODE_DIMS[dimIdx].width, height: NODE_DIMS[dimIdx].height },
+    width,
+    height,
+    style: { width, minHeight: height },
   });
   if (parentId) {
     edges.push({
@@ -141,6 +153,7 @@ function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
 function InnerCanvas({ data }: { data: MindMapData }) {
   const { fitView } = useReactFlow();
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
+  const reactFlowCanvasRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedBranch, setSelectedBranch] = useState<Set<string> | null>(null);
@@ -222,14 +235,20 @@ function InnerCanvas({ data }: { data: MindMapData }) {
 
   // ─── Export helpers ──────────────────────────────────────────────────────
 
+  /** Filter function that excludes UI chrome (toolbar, hint bar) from exports. */
+  const exportFilter = useCallback((node: HTMLElement) => {
+    return node.dataset?.exportExclude !== "true";
+  }, []);
+
   const downloadPng = useCallback(async () => {
-    const el = reactFlowWrapperRef.current;
+    const el = reactFlowCanvasRef.current;
     if (!el) return;
     try {
       const dataUrl = await toPng(el, {
         backgroundColor: "#0f172a",
         quality: 1,
         pixelRatio: 2,
+        filter: exportFilter,
       });
       const a = document.createElement("a");
       a.href = dataUrl;
@@ -238,13 +257,16 @@ function InnerCanvas({ data }: { data: MindMapData }) {
     } catch (err) {
       console.error("PNG export failed", err);
     }
-  }, []);
+  }, [exportFilter]);
 
   const downloadSvg = useCallback(async () => {
-    const el = reactFlowWrapperRef.current;
+    const el = reactFlowCanvasRef.current;
     if (!el) return;
     try {
-      const svgUrl = await toSvg(el, { backgroundColor: "#0f172a" });
+      const svgUrl = await toSvg(el, {
+        backgroundColor: "#0f172a",
+        filter: exportFilter,
+      });
       const a = document.createElement("a");
       a.href = svgUrl;
       a.download = "mindmap.svg";
@@ -252,7 +274,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
     } catch (err) {
       console.error("SVG export failed", err);
     }
-  }, []);
+  }, [exportFilter]);
 
   const handleFitView = useCallback(() => {
     fitView({ padding: 0.15, duration: 400 });
@@ -260,6 +282,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
 
   return (
     <div className="relative w-full h-full" ref={reactFlowWrapperRef}>
+      <div className="w-full h-full" ref={reactFlowCanvasRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -298,9 +321,10 @@ function InnerCanvas({ data }: { data: MindMapData }) {
           showInteractive={false}
         />
       </ReactFlow>
+      </div>
 
-      {/* Toolbar */}
-      <div className="absolute top-3 right-3 flex gap-2 z-10">
+      {/* Toolbar — excluded from image export */}
+      <div className="absolute top-3 right-3 flex gap-2 z-10" data-export-exclude="true">
         <button
           type="button"
           onClick={handleFitView}
@@ -338,7 +362,7 @@ function InnerCanvas({ data }: { data: MindMapData }) {
       </div>
 
       {selectedBranch !== null && (
-        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-[var(--text-muted)] bg-[var(--bg-elevated)]/80 px-3 py-1.5 rounded-full">
+        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-[var(--text-muted)] bg-[var(--bg-elevated)]/80 px-3 py-1.5 rounded-full" data-export-exclude="true">
           Click a node to highlight its branch · Click background to clear
         </p>
       )}

@@ -35,7 +35,7 @@ export default function ExplainPanel({
   return (
     <aside
       aria-hidden={!isOpen}
-      className={`fixed right-0 top-10 z-[65] h-[calc(100vh-2.5rem)] w-[350px] border-l border-[var(--border-default)]/80 bg-[var(--bg-surface-overlay)]/95 shadow-2xl transition-transform duration-300 ${
+      className={`print:hidden fixed right-0 top-10 z-[65] h-[calc(100vh-2.5rem)] w-[350px] border-l border-[var(--border-default)]/80 bg-[var(--bg-surface-overlay)]/95 shadow-2xl transition-transform duration-300 ${
         isOpen ? "translate-x-0" : "translate-x-full"
       }`}
     >

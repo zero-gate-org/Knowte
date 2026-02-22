@@ -258,8 +258,14 @@ fn merge_quiz_sections(section_jsons: &[String]) -> Result<String, String> {
 /// Build a short preview from an LLM response (first 200 chars).
 fn make_preview(raw: &str) -> String {
     let trimmed = raw.trim();
-    if trimmed.len() > 200 {
-        format!("{}…", &trimmed[..200])
+    if trimmed.chars().count() > 200 {
+        // Find the byte index of the 200th character to avoid splitting multi-byte chars
+        let cutoff = trimmed
+            .char_indices()
+            .nth(200)
+            .map(|(i, _)| i)
+            .unwrap_or(trimmed.len());
+        format!("{}…", &trimmed[..cutoff])
     } else {
         trimmed.to_string()
     }
