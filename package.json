@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "./scripts/tauri-safe.sh"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
