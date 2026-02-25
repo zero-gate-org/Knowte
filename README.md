@@ -149,4 +149,4 @@ GPL 3.0 License — see [LICENSE](docs/LICENSE) for details.
 
 ## Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, code conventions, and how to submit changes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
