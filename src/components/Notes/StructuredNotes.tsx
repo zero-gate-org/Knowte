@@ -1,5 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { NotesTerm, NotesTopic, StructuredNotes } from "../../lib/types";
+import type {
+  NotesSupportMaterial,
+  NotesTerm,
+  NotesTopic,
+  StructuredNotes,
+} from "../../lib/types";
 import { parseSummaryBlocks, type SummaryBlock } from "./summaryFormatting";
 
 function renderInlineMarkdown(text: string): ReactNode[] {
@@ -85,6 +90,74 @@ function renderSummaryBlock(block: SummaryBlock, index: number) {
   );
 }
 
+function renderMultilineText(text: string) {
+  return text.split("\n").map((line, index, list) => (
+    <span key={`${line}-${index}`}>
+      {renderInlineMarkdown(line)}
+      {index < list.length - 1 ? <br /> : null}
+    </span>
+  ));
+}
+
+function supportMaterialLabel(kind: string) {
+  switch (kind) {
+    case "code":
+      return "Code";
+    case "formula":
+      return "Formula";
+    case "worked_example":
+      return "Worked Example";
+    case "timeline":
+      return "Timeline";
+    case "table":
+      return "Table";
+    case "diagram_notes":
+      return "Diagram Notes";
+    case "case_study":
+      return "Case Study";
+    default:
+      return "Reference";
+  }
+}
+
+function SupportMaterialCard({ material }: { material: NotesSupportMaterial }) {
+  const kind = material.kind ?? "reference";
+  const title = material.title?.trim() || supportMaterialLabel(kind);
+  const isCode = kind === "code";
+  const isFormula = kind === "formula";
+
+  return (
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 p-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-[var(--accent-primary-subtle)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent-primary)]">
+          {supportMaterialLabel(kind)}
+        </span>
+        {material.language && (
+          <span className="rounded-full bg-[var(--bg-surface-overlay)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">
+            {material.language}
+          </span>
+        )}
+      </div>
+
+      <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+
+      {isCode ? (
+        <pre className="overflow-x-auto rounded-lg bg-[var(--bg-inset)] p-4 text-sm leading-6 text-[var(--text-primary)]">
+          <code>{material.content}</code>
+        </pre>
+      ) : isFormula ? (
+        <div className="overflow-x-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface-overlay)] px-4 py-3 font-mono text-sm leading-6 text-[var(--text-primary)]">
+          {renderMultilineText(material.content)}
+        </div>
+      ) : (
+        <div className="rounded-lg bg-[var(--bg-surface-overlay)] px-4 py-3 text-sm leading-7 text-[var(--text-secondary)] whitespace-pre-wrap">
+          {renderMultilineText(material.content)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Collapsible Topic Section ────────────────────────────────────────────────
 
 interface CollapsibleTopicProps {
@@ -99,6 +172,7 @@ function CollapsibleTopic({ topic, topicIndex }: CollapsibleTopicProps) {
   // Guard against LLM omitting optional arrays
   const keyPoints = topic.key_points ?? [];
   const examples = topic.examples ?? [];
+  const supportMaterials = topic.support_materials ?? [];
 
   return (
     <section id={id} className="mb-8">
@@ -147,6 +221,14 @@ function CollapsibleTopic({ topic, topicIndex }: CollapsibleTopicProps) {
                   </p>
                   <p className="text-[var(--text-secondary)] text-sm leading-relaxed">{ex}</p>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {supportMaterials.length > 0 && (
+            <div className="space-y-3">
+              {supportMaterials.map((material, i) => (
+                <SupportMaterialCard key={`${material.kind}-${material.title}-${i}`} material={material} />
               ))}
             </div>
           )}

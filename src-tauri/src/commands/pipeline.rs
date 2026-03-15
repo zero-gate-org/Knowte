@@ -2,7 +2,12 @@ use crate::db::{
     queries::count_llm_stage_cache, queries::get_pipeline_stages, queries::PipelineStageRecord,
     AppDatabase,
 };
-use crate::pipeline::orchestrator::{run_full_pipeline_with_options, PipelineRunOptions};
+use crate::pipeline::orchestrator::{
+    build_generation_context, build_mindmap_source, merge_flashcards_sections,
+    merge_notes_sections, merge_quiz_sections, run_full_pipeline_with_options, run_json_stage,
+    split_long_transcript_sections, validate_flashcards_json, validate_mindmap_json,
+    validate_notes_json, validate_quiz_json, PipelineRunOptions,
+};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use tauri::{AppHandle, Manager};
@@ -158,6 +163,18 @@ pub async fn get_mindmap(app: AppHandle, lecture_id: String) -> Result<Option<St
 /// Minimal structs used only for Markdown serialisation (deserialized from the
 /// stored notes JSON).
 #[derive(serde::Deserialize, Default)]
+struct NotesSupportMaterial {
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    content: String,
+    #[serde(default)]
+    language: Option<String>,
+}
+
+#[derive(serde::Deserialize, Default)]
 struct NotesTopic {
     heading: String,
     #[serde(default)]
@@ -166,6 +183,8 @@ struct NotesTopic {
     details: String,
     #[serde(default)]
     examples: Vec<String>,
+    #[serde(default)]
+    support_materials: Vec<NotesSupportMaterial>,
 }
 
 #[derive(serde::Deserialize)]
@@ -211,6 +230,41 @@ fn notes_to_markdown(notes: &StructuredNotesData) -> String {
                 md.push_str(&format!("> {}\n\n", ex));
             }
         }
+
+        if !topic.support_materials.is_empty() {
+            md.push_str("### Support Materials\n\n");
+            for material in &topic.support_materials {
+                let label = if material.kind.trim().is_empty() {
+                    "Reference"
+                } else {
+                    material.kind.trim()
+                };
+                let title = if material.title.trim().is_empty() {
+                    "Support Material"
+                } else {
+                    material.title.trim()
+                };
+                md.push_str(&format!("#### {}: {}\n\n", label, title));
+
+                match label {
+                    "code" => {
+                        let language = material.language.as_deref().unwrap_or("").trim();
+                        md.push_str(&format!(
+                            "```{}\n{}\n```\n\n",
+                            language,
+                            material.content.trim()
+                        ));
+                    }
+                    "formula" | "table" => {
+                        md.push_str(&format!("```text\n{}\n```\n\n", material.content.trim()));
+                    }
+                    _ => {
+                        md.push_str(material.content.trim());
+                        md.push_str("\n\n");
+                    }
+                }
+            }
+        }
     }
 
     if !notes.key_terms.is_empty() {
@@ -243,7 +297,7 @@ pub async fn regenerate_notes(
     app: AppHandle,
     lecture_id: String,
 ) -> Result<Option<String>, String> {
-    use crate::commands::llm::{parse_json_from_response, OllamaClient};
+    use crate::commands::llm::OllamaClient;
     use crate::utils::prompt_templates;
 
     let db = app
@@ -268,48 +322,51 @@ pub async fn regenerate_notes(
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
-
-    // ── Build context (mirrors orchestrator logic) ───────────────────────────
-    const CHUNK_CHARS: usize = 16_000;
-    let context_text = if transcript_rec.full_text.len() > CHUNK_CHARS {
-        format!(
-            "LECTURE SUMMARY:\n{summary}\n\nFIRST SECTION OF TRANSCRIPT:\n{}\n\
-             (Note: this is a long lecture; the above is a representative excerpt.)",
-            &transcript_rec.full_text[..CHUNK_CHARS]
-        )
-    } else {
-        transcript_rec.full_text.clone()
-    };
+    let long_sections = split_long_transcript_sections(&transcript_rec.full_text);
+    let context_text =
+        build_generation_context(&summary, &transcript_rec.full_text, &long_sections);
 
     let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
-    let prompt = prompt_templates::structured_notes_prompt(&context_text, &level);
-
-    // ── Call LLM ─────────────────────────────────────────────────────────────
-    let raw = client
-        .generate(&app, &model, &prompt, &lecture_id, "notes")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let extracted = parse_json_from_response(&raw);
-
-    // Validate JSON, retry once on failure
-    let json = if serde_json::from_str::<serde_json::Value>(&extracted).is_ok() {
-        extracted
-    } else {
-        let retry_prompt = format!(
-            "{}\n\nIMPORTANT: Output ONLY valid JSON with no additional text or markdown fences.",
-            prompt
-        );
-        let retry_raw = client
-            .generate(&app, &model, &retry_prompt, &lecture_id, "notes_retry")
-            .await
-            .map_err(|e| e.to_string())?;
-        let retry_extracted = parse_json_from_response(&retry_raw);
-        if serde_json::from_str::<serde_json::Value>(&retry_extracted).is_ok() {
-            retry_extracted
-        } else {
-            return Err("LLM did not return valid JSON after retry.".to_string());
+    let json = if transcript_rec.full_text.split_whitespace().count() > 10_000 {
+        let total = long_sections.len();
+        let mut section_notes = Vec::new();
+        for (index, section) in long_sections.iter().enumerate() {
+            let section_context = format!(
+                "LECTURE SUMMARY:\n{summary}\n\nSECTION {}/{}:\n{}",
+                index + 1,
+                total,
+                section
+            );
+            let section_prompt =
+                prompt_templates::structured_notes_prompt(&section_context, &level);
+            section_notes.push(
+                run_json_stage(
+                    &client,
+                    &app,
+                    &model,
+                    &section_prompt,
+                    &lecture_id,
+                    &format!("notes_regen_section_{}", index + 1),
+                    Some(prompt_templates::notes_response_schema()),
+                    validate_notes_json,
+                )
+                .await?,
+            );
         }
+        merge_notes_sections(&section_notes)?
+    } else {
+        let prompt = prompt_templates::structured_notes_prompt(&context_text, &level);
+        run_json_stage(
+            &client,
+            &app,
+            &model,
+            &prompt,
+            &lecture_id,
+            "notes_regen",
+            Some(prompt_templates::notes_response_schema()),
+            validate_notes_json,
+        )
+        .await?
     };
 
     // ── Persist ──────────────────────────────────────────────────────────────
@@ -364,7 +421,7 @@ pub fn export_notes_markdown(app: AppHandle, lecture_id: String) -> Result<Optio
 /// settings.  Returns the new quiz JSON (or an error string).
 #[tauri::command]
 pub async fn regenerate_quiz(app: AppHandle, lecture_id: String) -> Result<Option<String>, String> {
-    use crate::commands::llm::{parse_json_from_response, OllamaClient};
+    use crate::commands::llm::OllamaClient;
     use crate::utils::prompt_templates;
 
     let db = app
@@ -376,6 +433,9 @@ pub async fn regenerate_quiz(app: AppHandle, lecture_id: String) -> Result<Optio
     let transcript_rec = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    let summary = crate::db::queries::get_lecture_summary(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
     drop(conn);
 
     // ── Load settings ────────────────────────────────────────────────────────
@@ -385,43 +445,50 @@ pub async fn regenerate_quiz(app: AppHandle, lecture_id: String) -> Result<Optio
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
 
-    // ── Truncate transcript if needed (mirrors orchestrator logic) ───────────
-    const CHUNK_CHARS: usize = 16_000;
-    let context_text = if transcript_rec.full_text.len() > CHUNK_CHARS {
-        transcript_rec.full_text[..CHUNK_CHARS].to_string()
-    } else {
-        transcript_rec.full_text.clone()
-    };
+    let long_sections = split_long_transcript_sections(&transcript_rec.full_text);
+    let context_text =
+        build_generation_context(&summary, &transcript_rec.full_text, &long_sections);
 
     let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
-    let prompt = prompt_templates::quiz_prompt(&context_text, &level);
-
-    // ── Call LLM ─────────────────────────────────────────────────────────────
-    let raw = client
-        .generate(&app, &model, &prompt, &lecture_id, "quiz")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let extracted = parse_json_from_response(&raw);
-
-    // Validate JSON, retry once on failure
-    let json = if serde_json::from_str::<serde_json::Value>(&extracted).is_ok() {
-        extracted
-    } else {
-        let retry_prompt = format!(
-            "{}\n\nIMPORTANT: Output ONLY valid JSON with no additional text or markdown fences.",
-            prompt
-        );
-        let retry_raw = client
-            .generate(&app, &model, &retry_prompt, &lecture_id, "quiz_retry")
-            .await
-            .map_err(|e| e.to_string())?;
-        let retry_extracted = parse_json_from_response(&retry_raw);
-        if serde_json::from_str::<serde_json::Value>(&retry_extracted).is_ok() {
-            retry_extracted
-        } else {
-            return Err("LLM did not return valid JSON after retry.".to_string());
+    let json = if transcript_rec.full_text.split_whitespace().count() > 10_000 {
+        let total = long_sections.len();
+        let mut section_quizzes = Vec::new();
+        for (index, section) in long_sections.iter().enumerate() {
+            let section_context = format!(
+                "LECTURE SUMMARY:\n{summary}\n\nSECTION {}/{}:\n{}",
+                index + 1,
+                total,
+                section
+            );
+            let section_prompt = prompt_templates::quiz_prompt(&section_context, &level);
+            section_quizzes.push(
+                run_json_stage(
+                    &client,
+                    &app,
+                    &model,
+                    &section_prompt,
+                    &lecture_id,
+                    &format!("quiz_regen_section_{}", index + 1),
+                    Some(prompt_templates::quiz_response_schema()),
+                    validate_quiz_json,
+                )
+                .await?,
+            );
         }
+        merge_quiz_sections(&section_quizzes)?
+    } else {
+        let prompt = prompt_templates::quiz_prompt(&context_text, &level);
+        run_json_stage(
+            &client,
+            &app,
+            &model,
+            &prompt,
+            &lecture_id,
+            "quiz_regen",
+            Some(prompt_templates::quiz_response_schema()),
+            validate_quiz_json,
+        )
+        .await?
     };
 
     // ── Persist ──────────────────────────────────────────────────────────────
@@ -440,7 +507,7 @@ pub async fn regenerate_mindmap(
     app: AppHandle,
     lecture_id: String,
 ) -> Result<Option<String>, String> {
-    use crate::commands::llm::{parse_json_from_response, OllamaClient};
+    use crate::commands::llm::OllamaClient;
     use crate::utils::prompt_templates;
 
     let db = app
@@ -451,6 +518,11 @@ pub async fn regenerate_mindmap(
     let transcript_rec = crate::db::queries::get_transcript_by_lecture_id(&conn, &lecture_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "No transcript found for this lecture.".to_string())?;
+    let summary = crate::db::queries::get_lecture_summary(&conn, &lecture_id)
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let notes_json =
+        crate::db::queries::get_notes(&conn, &lecture_id).map_err(|e| e.to_string())?;
     drop(conn);
 
     let settings =
@@ -459,41 +531,25 @@ pub async fn regenerate_mindmap(
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
 
-    const CHUNK_CHARS: usize = 16_000;
-    let context_text = if transcript_rec.full_text.len() > CHUNK_CHARS {
-        transcript_rec.full_text[..CHUNK_CHARS].to_string()
-    } else {
-        transcript_rec.full_text.clone()
-    };
+    let long_sections = split_long_transcript_sections(&transcript_rec.full_text);
+    let fallback_context =
+        build_generation_context(&summary, &transcript_rec.full_text, &long_sections);
+    let context_text = build_mindmap_source(&summary, notes_json.as_deref(), &fallback_context);
 
     let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
     let prompt = prompt_templates::mindmap_prompt(&context_text, &level);
 
-    let raw = client
-        .generate(&app, &model, &prompt, &lecture_id, "mindmap")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let extracted = parse_json_from_response(&raw);
-
-    let json = if serde_json::from_str::<serde_json::Value>(&extracted).is_ok() {
-        extracted
-    } else {
-        let retry_prompt = format!(
-            "{}\n\nIMPORTANT: Output ONLY valid JSON with no additional text or markdown fences.",
-            prompt
-        );
-        let retry_raw = client
-            .generate(&app, &model, &retry_prompt, &lecture_id, "mindmap_retry")
-            .await
-            .map_err(|e| e.to_string())?;
-        let retry_extracted = parse_json_from_response(&retry_raw);
-        if serde_json::from_str::<serde_json::Value>(&retry_extracted).is_ok() {
-            retry_extracted
-        } else {
-            return Err("LLM did not return valid JSON after retry.".to_string());
-        }
-    };
+    let json = run_json_stage(
+        &client,
+        &app,
+        &model,
+        &prompt,
+        &lecture_id,
+        "mindmap_regen",
+        Some(serde_json::Value::String("json".to_string())),
+        validate_mindmap_json,
+    )
+    .await?;
 
     let conn = db.connect().map_err(|e| e.to_string())?;
     crate::db::queries::upsert_mindmap(&conn, &lecture_id, &json).map_err(|e| e.to_string())?;
@@ -510,7 +566,7 @@ pub async fn regenerate_flashcards(
     app: AppHandle,
     lecture_id: String,
 ) -> Result<Option<String>, String> {
-    use crate::commands::llm::{parse_json_from_response, OllamaClient};
+    use crate::commands::llm::OllamaClient;
     use crate::utils::prompt_templates;
 
     let db = app
@@ -535,48 +591,50 @@ pub async fn regenerate_flashcards(
 
     let model = settings.llm_model.clone();
     let level = settings.personalization_level.clone();
-
-    // ── Build context (mirrors orchestrator logic) ───────────────────────────
-    const CHUNK_CHARS: usize = 16_000;
-    let context_text = if transcript_rec.full_text.len() > CHUNK_CHARS {
-        format!(
-            "LECTURE SUMMARY:\n{summary}\n\nFIRST SECTION OF TRANSCRIPT:\n{}\n\
-             (Note: this is a long lecture; the above is a representative excerpt.)",
-            &transcript_rec.full_text[..CHUNK_CHARS]
-        )
-    } else {
-        transcript_rec.full_text.clone()
-    };
+    let long_sections = split_long_transcript_sections(&transcript_rec.full_text);
+    let context_text =
+        build_generation_context(&summary, &transcript_rec.full_text, &long_sections);
 
     let client = OllamaClient::new(settings.ollama_url.clone(), settings.llm_timeout_seconds);
-    let prompt = prompt_templates::flashcards_prompt(&context_text, &level);
-
-    // ── Call LLM ─────────────────────────────────────────────────────────────
-    let raw = client
-        .generate(&app, &model, &prompt, &lecture_id, "flashcards")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let extracted = parse_json_from_response(&raw);
-
-    // Validate JSON, retry once on failure
-    let json = if serde_json::from_str::<serde_json::Value>(&extracted).is_ok() {
-        extracted
-    } else {
-        let retry_prompt = format!(
-            "{}\n\nIMPORTANT: Output ONLY valid JSON with no additional text or markdown fences.",
-            prompt
-        );
-        let retry_raw = client
-            .generate(&app, &model, &retry_prompt, &lecture_id, "flashcards_retry")
-            .await
-            .map_err(|e| e.to_string())?;
-        let retry_extracted = parse_json_from_response(&retry_raw);
-        if serde_json::from_str::<serde_json::Value>(&retry_extracted).is_ok() {
-            retry_extracted
-        } else {
-            return Err("LLM did not return valid JSON after retry.".to_string());
+    let json = if transcript_rec.full_text.split_whitespace().count() > 10_000 {
+        let total = long_sections.len();
+        let mut section_flashcards = Vec::new();
+        for (index, section) in long_sections.iter().enumerate() {
+            let section_context = format!(
+                "LECTURE SUMMARY:\n{summary}\n\nSECTION {}/{}:\n{}",
+                index + 1,
+                total,
+                section
+            );
+            let section_prompt = prompt_templates::flashcards_prompt(&section_context, &level);
+            section_flashcards.push(
+                run_json_stage(
+                    &client,
+                    &app,
+                    &model,
+                    &section_prompt,
+                    &lecture_id,
+                    &format!("flashcards_regen_section_{}", index + 1),
+                    Some(prompt_templates::flashcards_response_schema()),
+                    validate_flashcards_json,
+                )
+                .await?,
+            );
         }
+        merge_flashcards_sections(&section_flashcards)?
+    } else {
+        let prompt = prompt_templates::flashcards_prompt(&context_text, &level);
+        run_json_stage(
+            &client,
+            &app,
+            &model,
+            &prompt,
+            &lecture_id,
+            "flashcards_regen",
+            Some(prompt_templates::flashcards_response_schema()),
+            validate_flashcards_json,
+        )
+        .await?
     };
 
     // ── Persist ──────────────────────────────────────────────────────────────

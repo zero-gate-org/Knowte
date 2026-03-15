@@ -102,11 +102,19 @@ export interface ExplainHistoryEntry {
 }
 
 // Structured Notes (matches prompt schema)
+export interface NotesSupportMaterial {
+  kind: string;
+  title: string;
+  content: string;
+  language?: string | null;
+}
+
 export interface NotesTopic {
   heading: string;
   key_points: string[];
   details: string;
   examples: string[];
+  support_materials: NotesSupportMaterial[];
 }
 
 export interface NotesTerm {

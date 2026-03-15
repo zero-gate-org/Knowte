@@ -1,6 +1,7 @@
 import type {
   Flashcard,
   FlashcardsOutput,
+  NotesSupportMaterial,
   NotesTerm,
   NotesTopic,
   Question,
@@ -48,6 +49,29 @@ function coerceStringArray(value: unknown): string[] {
   });
 }
 
+function normalizeSupportMaterial(value: unknown): NotesSupportMaterial | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const kind = asText(value.kind ?? value.type ?? value.category) ?? "reference";
+  const title = asText(value.title ?? value.label ?? value.name) ?? "";
+  const content =
+    asText(value.content ?? value.text ?? value.body ?? value.value ?? value.snippet) ?? "";
+  const language = asText(value.language ?? value.lang ?? value.syntax);
+
+  if (content.length === 0) {
+    return null;
+  }
+
+  return {
+    kind,
+    title: title || "Support Material",
+    content,
+    language,
+  };
+}
+
 function normalizeNotesTopic(value: unknown, index: number): NotesTopic | null {
   if (!isRecord(value)) {
     const primitive = asText(value);
@@ -60,6 +84,7 @@ function normalizeNotesTopic(value: unknown, index: number): NotesTopic | null {
       key_points: [primitive],
       details: "",
       examples: [],
+      support_materials: [],
     };
   }
 
@@ -73,8 +98,19 @@ function normalizeNotesTopic(value: unknown, index: number): NotesTopic | null {
   const examples = coerceStringArray(
     value.examples ?? value.example_list ?? value.example ?? value.samples,
   );
+  const supportMaterials = coerceArray(
+    value.support_materials ?? value.supportMaterials ?? value.artifacts ?? value.resources,
+  ).flatMap((item) => {
+    const normalized = normalizeSupportMaterial(item);
+    return normalized ? [normalized] : [];
+  });
 
-  if (keyPoints.length === 0 && details.length === 0 && examples.length === 0) {
+  if (
+    keyPoints.length === 0 &&
+    details.length === 0 &&
+    examples.length === 0 &&
+    supportMaterials.length === 0
+  ) {
     return null;
   }
 
@@ -83,6 +119,7 @@ function normalizeNotesTopic(value: unknown, index: number): NotesTopic | null {
     key_points: keyPoints,
     details,
     examples,
+    support_materials: supportMaterials,
   };
 }
 

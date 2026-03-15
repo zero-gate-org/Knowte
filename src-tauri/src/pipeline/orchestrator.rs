@@ -1,6 +1,10 @@
-use crate::commands::llm::{parse_json_from_response, OllamaClient};
+use crate::commands::llm::{parse_json_from_response, GenerateConfig, OllamaClient};
 use crate::commands::settings::get_settings;
 use crate::db::{queries, AppDatabase};
+use crate::models::{
+    Flashcard, FlashcardsOutput, KeywordsOutput, MindMapData, MindMapNode, NotesSupportMaterial,
+    NotesTerm, NotesTopic, Question, Quiz, StructuredNotes,
+};
 use crate::utils::prompt_templates;
 use chrono::Utc;
 use serde::Serialize;
@@ -36,6 +40,10 @@ const CHUNK_CHARS: usize = CHUNK_TOKENS * CHARS_PER_TOKEN; // 16 000
 const LONG_TRANSCRIPT_WORD_THRESHOLD: usize = 10_000;
 const SECTION_TARGET_WORDS: usize = 1_800;
 const SECTION_MAX_WORDS: usize = 2_600;
+const LONG_CONTEXT_SECTION_SNIPPET_CHARS: usize = 800;
+const LONG_CONTEXT_MAX_SECTIONS: usize = 6;
+const MAX_MINDMAP_DEPTH: usize = 4;
+const MAX_MINDMAP_CHILDREN: usize = 6;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PipelineRunOptions {
@@ -106,7 +114,7 @@ fn contains_topic_shift_marker(text: &str) -> bool {
     .any(|marker| lower.contains(marker))
 }
 
-fn split_long_transcript_sections(text: &str) -> Vec<String> {
+pub(crate) fn split_long_transcript_sections(text: &str) -> Vec<String> {
     let mut sections = Vec::new();
     let mut current = Vec::new();
     let mut current_words = 0usize;
@@ -158,7 +166,632 @@ fn split_long_transcript_sections(text: &str) -> Vec<String> {
     }
 }
 
-fn merge_notes_sections(section_jsons: &[String]) -> Result<String, String> {
+fn normalize_key(value: &str) -> String {
+    value
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|ch| if ch.is_alphanumeric() { ch } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn dedupe_trimmed_strings(values: Vec<String>, max_items: usize) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut output = Vec::new();
+
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = normalize_key(trimmed);
+        if key.is_empty() || seen.contains(&key) {
+            continue;
+        }
+        seen.insert(key);
+        output.push(trimmed.to_string());
+        if output.len() >= max_items {
+            break;
+        }
+    }
+
+    output
+}
+
+fn section_snapshot(section: &str) -> String {
+    let trimmed = collapse_blank_lines(section).replace('\n', " ");
+    let snippet = trimmed.trim();
+    if snippet.chars().count() <= LONG_CONTEXT_SECTION_SNIPPET_CHARS {
+        snippet.to_string()
+    } else {
+        let cutoff = snippet
+            .char_indices()
+            .nth(LONG_CONTEXT_SECTION_SNIPPET_CHARS)
+            .map(|(index, _)| index)
+            .unwrap_or(snippet.len());
+        format!("{}…", &snippet[..cutoff])
+    }
+}
+
+pub(crate) fn build_generation_context(
+    summary_text: &str,
+    transcript_text: &str,
+    long_sections: &[String],
+) -> String {
+    if long_sections.is_empty() {
+        return transcript_text.to_string();
+    }
+
+    let mut parts = Vec::new();
+    if !summary_text.trim().is_empty() {
+        parts.push(format!("LECTURE SUMMARY:\n{}", summary_text.trim()));
+    }
+
+    let mut section_summaries = Vec::new();
+    for (index, section) in long_sections
+        .iter()
+        .take(LONG_CONTEXT_MAX_SECTIONS)
+        .enumerate()
+    {
+        section_summaries.push(format!(
+            "SECTION {} SNAPSHOT:\n{}",
+            index + 1,
+            section_snapshot(section)
+        ));
+    }
+
+    if !section_summaries.is_empty() {
+        parts.push(section_summaries.join("\n\n"));
+    }
+
+    parts.join("\n\n")
+}
+
+pub(crate) fn build_keywords_source(
+    summary_text: &str,
+    notes_json: Option<&str>,
+    transcript_text: &str,
+) -> String {
+    let mut parts = Vec::new();
+    if !summary_text.trim().is_empty() {
+        parts.push(format!("LECTURE SUMMARY:\n{}", summary_text.trim()));
+    }
+    if let Some(notes_json) = notes_json.filter(|value| !value.trim().is_empty()) {
+        parts.push(format!("STRUCTURED NOTES JSON:\n{notes_json}"));
+    }
+    if parts.is_empty() {
+        transcript_text.to_string()
+    } else {
+        parts.join("\n\n")
+    }
+}
+
+pub(crate) fn build_mindmap_source(
+    summary_text: &str,
+    notes_json: Option<&str>,
+    fallback_context: &str,
+) -> String {
+    let mut parts = Vec::new();
+    if !summary_text.trim().is_empty() {
+        parts.push(format!("LECTURE SUMMARY:\n{}", summary_text.trim()));
+    }
+
+    if let Some(notes_json) = notes_json.filter(|value| !value.trim().is_empty()) {
+        if let Ok(notes) = parse_notes_document(notes_json) {
+            let mut outline = Vec::new();
+            outline.push(format!("TITLE: {}", notes.title));
+            for topic in notes.topics.iter().take(6) {
+                outline.push(format!("TOPIC: {}", topic.heading));
+                for point in topic.key_points.iter().take(4) {
+                    outline.push(format!("  - {}", point));
+                }
+                for material in topic.support_materials.iter().take(3) {
+                    outline.push(format!(
+                        "  {}: {}",
+                        material.kind.to_uppercase(),
+                        material.title
+                    ));
+                }
+            }
+            for term in notes.key_terms.iter().take(10) {
+                outline.push(format!("TERM: {}", term.term));
+            }
+            parts.push(format!("NOTES OUTLINE:\n{}", outline.join("\n")));
+        }
+    }
+
+    if parts.is_empty() {
+        fallback_context.to_string()
+    } else {
+        parts.join("\n\n")
+    }
+}
+
+fn normalize_question_type(value: &str) -> Option<String> {
+    match normalize_key(value).replace(' ', "_").as_str() {
+        "multiple_choice" | "multiplechoice" => Some("multiple_choice".to_string()),
+        "short_answer" | "shortanswer" => Some("short_answer".to_string()),
+        "true_false" | "truefalse" => Some("true_false".to_string()),
+        _ => None,
+    }
+}
+
+fn normalize_difficulty(value: &str) -> String {
+    match normalize_key(value).as_str() {
+        "easy" => "easy".to_string(),
+        "hard" => "hard".to_string(),
+        _ => "medium".to_string(),
+    }
+}
+
+fn contains_case_insensitive(values: &[String], target: &str) -> bool {
+    let target_key = normalize_key(target);
+    values
+        .iter()
+        .any(|value| normalize_key(value) == target_key)
+}
+
+fn parse_notes_document(raw: &str) -> Result<StructuredNotes, String> {
+    let mut notes: StructuredNotes =
+        serde_json::from_str(raw).map_err(|_| "Unable to parse notes JSON.".to_string())?;
+
+    notes.title = notes.title.trim().to_string();
+
+    let mut seen_topics = HashSet::new();
+    notes.topics = notes
+        .topics
+        .into_iter()
+        .filter_map(|topic| {
+            let heading = topic.heading.trim().to_string();
+            let key = normalize_key(&heading);
+            if heading.is_empty() || key.is_empty() || seen_topics.contains(&key) {
+                return None;
+            }
+            seen_topics.insert(key);
+
+            let key_points = dedupe_trimmed_strings(topic.key_points, 8);
+            let examples = dedupe_trimmed_strings(topic.examples, 5);
+            let details = collapse_blank_lines(topic.details.trim());
+            let support_materials = topic
+                .support_materials
+                .into_iter()
+                .filter_map(|item| {
+                    let kind = normalize_key(&item.kind);
+                    let title = item.title.trim().to_string();
+                    let content = collapse_blank_lines(item.content.trim());
+                    let language = item
+                        .language
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToOwned::to_owned);
+                    if content.is_empty() {
+                        return None;
+                    }
+                    Some(NotesSupportMaterial {
+                        kind: if kind.is_empty() {
+                            "reference".to_string()
+                        } else {
+                            kind.replace(' ', "_")
+                        },
+                        title: if title.is_empty() {
+                            "Support Material".to_string()
+                        } else {
+                            title
+                        },
+                        content,
+                        language,
+                    })
+                })
+                .take(6)
+                .collect::<Vec<_>>();
+
+            if key_points.is_empty()
+                && details.is_empty()
+                && examples.is_empty()
+                && support_materials.is_empty()
+            {
+                return None;
+            }
+
+            Some(NotesTopic {
+                heading,
+                key_points,
+                details,
+                examples,
+                support_materials,
+            })
+        })
+        .collect();
+
+    let mut seen_terms = HashSet::new();
+    notes.key_terms = notes
+        .key_terms
+        .into_iter()
+        .filter_map(|term| {
+            let name = term.term.trim().to_string();
+            let definition = collapse_blank_lines(term.definition.trim());
+            let key = normalize_key(&name);
+            if name.is_empty()
+                || definition.is_empty()
+                || key.is_empty()
+                || seen_terms.contains(&key)
+            {
+                return None;
+            }
+            seen_terms.insert(key);
+            Some(NotesTerm {
+                term: name,
+                definition,
+            })
+        })
+        .take(18)
+        .collect();
+
+    notes.takeaways = dedupe_trimmed_strings(notes.takeaways, 10);
+
+    if notes.title.is_empty() {
+        notes.title = notes
+            .topics
+            .first()
+            .map(|topic| format!("{} Notes", topic.heading))
+            .unwrap_or_else(|| "Lecture Notes".to_string());
+    }
+
+    if notes.topics.is_empty() && notes.key_terms.is_empty() && notes.takeaways.is_empty() {
+        return Err("Notes output did not contain any usable study content.".to_string());
+    }
+
+    Ok(notes)
+}
+
+pub(crate) fn validate_notes_json(raw: &str) -> Result<String, String> {
+    let notes = parse_notes_document(raw)?;
+    serde_json::to_string(&notes).map_err(|_| "Unable to serialize validated notes.".to_string())
+}
+
+fn parse_quiz_questions(raw: &str) -> Result<Vec<Question>, String> {
+    let quiz: Quiz =
+        serde_json::from_str(raw).map_err(|_| "Unable to parse quiz JSON.".to_string())?;
+    let mut seen_questions = HashSet::new();
+    let mut validated = Vec::new();
+
+    for question in quiz.questions {
+        let question_text = collapse_blank_lines(question.question.trim());
+        let question_key = normalize_key(&question_text);
+        if question_text.is_empty()
+            || question_key.is_empty()
+            || seen_questions.contains(&question_key)
+        {
+            continue;
+        }
+
+        let Some(question_type) = normalize_question_type(&question.question_type) else {
+            continue;
+        };
+
+        let difficulty = normalize_difficulty(&question.difficulty);
+        let explanation = collapse_blank_lines(question.explanation.trim());
+        let mut correct_answer = question.correct_answer.trim().to_string();
+        if correct_answer.is_empty() {
+            continue;
+        }
+
+        let options = match question_type.as_str() {
+            "multiple_choice" => {
+                let mut options = dedupe_trimmed_strings(question.options.unwrap_or_default(), 6);
+                if !contains_case_insensitive(&options, &correct_answer) {
+                    options.push(correct_answer.clone());
+                }
+                options = dedupe_trimmed_strings(options, 4);
+                if options.len() != 4 || !contains_case_insensitive(&options, &correct_answer) {
+                    continue;
+                }
+                if let Some(existing) = options
+                    .iter()
+                    .find(|option| normalize_key(option) == normalize_key(&correct_answer))
+                {
+                    correct_answer = existing.clone();
+                }
+                Some(options)
+            }
+            "true_false" => {
+                correct_answer = match normalize_key(&correct_answer).as_str() {
+                    "true" => "True".to_string(),
+                    "false" => "False".to_string(),
+                    _ => continue,
+                };
+                Some(vec!["True".to_string(), "False".to_string()])
+            }
+            "short_answer" => None,
+            _ => None,
+        };
+
+        seen_questions.insert(question_key);
+        validated.push(Question {
+            id: 0,
+            question_type,
+            question: question_text,
+            options,
+            correct_answer,
+            explanation,
+            difficulty,
+        });
+    }
+
+    Ok(validated)
+}
+
+fn select_quiz_questions(questions: Vec<Question>) -> Vec<Question> {
+    let mut multiple_choice = Vec::new();
+    let mut short_answer = Vec::new();
+    let mut true_false = Vec::new();
+
+    for question in questions {
+        match question.question_type.as_str() {
+            "multiple_choice" => multiple_choice.push(question),
+            "short_answer" => short_answer.push(question),
+            "true_false" => true_false.push(question),
+            _ => {}
+        }
+    }
+
+    let mut selected = Vec::new();
+    let targets = [
+        ("multiple_choice", 5usize),
+        ("short_answer", 3usize),
+        ("true_false", 2usize),
+    ];
+
+    for (question_type, target) in targets {
+        let pool = match question_type {
+            "multiple_choice" => &mut multiple_choice,
+            "short_answer" => &mut short_answer,
+            "true_false" => &mut true_false,
+            _ => unreachable!(),
+        };
+
+        while selected.len() < 10
+            && pool.len() > 0
+            && selected
+                .iter()
+                .filter(|item: &&Question| item.question_type == question_type)
+                .count()
+                < target
+        {
+            selected.push(pool.remove(0));
+        }
+    }
+
+    for pool in [&mut multiple_choice, &mut short_answer, &mut true_false] {
+        while selected.len() < 10 && !pool.is_empty() {
+            selected.push(pool.remove(0));
+        }
+    }
+
+    for (index, question) in selected.iter_mut().enumerate() {
+        question.id = (index + 1) as i64;
+    }
+
+    selected
+}
+
+pub(crate) fn validate_quiz_json(raw: &str) -> Result<String, String> {
+    let questions = select_quiz_questions(parse_quiz_questions(raw)?);
+    if questions.len() != 10 {
+        return Err(format!(
+            "Quiz output must contain exactly 10 usable questions after validation, found {}.",
+            questions.len()
+        ));
+    }
+    serde_json::to_string(&Quiz { questions })
+        .map_err(|_| "Unable to serialize validated quiz.".to_string())
+}
+
+fn flashcard_score(card: &Flashcard) -> usize {
+    let mut score = 0usize;
+    if card.front.contains('?') {
+        score += 2;
+    }
+    if card.tags.len() >= 2 {
+        score += 1;
+    }
+    let back_len = card.back.split_whitespace().count();
+    if (8..=35).contains(&back_len) {
+        score += 2;
+    }
+    let front_len = card.front.split_whitespace().count();
+    if (4..=16).contains(&front_len) {
+        score += 1;
+    }
+    score
+}
+
+fn parse_flashcards(raw: &str) -> Result<Vec<Flashcard>, String> {
+    let flashcards: FlashcardsOutput =
+        serde_json::from_str(raw).map_err(|_| "Unable to parse flashcards JSON.".to_string())?;
+    let mut seen = HashSet::new();
+    let mut cards = Vec::new();
+
+    for card in flashcards.cards {
+        let front = collapse_blank_lines(card.front.trim());
+        let back = collapse_blank_lines(card.back.trim());
+        if front.is_empty() || back.is_empty() {
+            continue;
+        }
+
+        let key = format!("{}::{}", normalize_key(&front), normalize_key(&back));
+        if key == "::" || seen.contains(&key) {
+            continue;
+        }
+
+        let tags = dedupe_trimmed_strings(
+            card.tags
+                .into_iter()
+                .filter(|tag| normalize_key(tag) != "lecture" && normalize_key(tag) != "study")
+                .collect(),
+            4,
+        );
+        seen.insert(key);
+        cards.push(Flashcard { front, back, tags });
+    }
+
+    Ok(cards)
+}
+
+fn select_flashcards(cards: Vec<Flashcard>) -> Vec<Flashcard> {
+    let mut indexed: Vec<(usize, Flashcard)> = cards.into_iter().enumerate().collect();
+    indexed.sort_by(|(left_index, left_card), (right_index, right_card)| {
+        flashcard_score(right_card)
+            .cmp(&flashcard_score(left_card))
+            .then_with(|| left_index.cmp(right_index))
+    });
+
+    indexed.into_iter().map(|(_, card)| card).take(18).collect()
+}
+
+pub(crate) fn validate_flashcards_json(raw: &str) -> Result<String, String> {
+    let cards = select_flashcards(parse_flashcards(raw)?);
+    if cards.len() < 8 {
+        return Err(format!(
+            "Flashcard output must contain at least 8 usable cards after validation, found {}.",
+            cards.len()
+        ));
+    }
+    serde_json::to_string(&FlashcardsOutput { cards })
+        .map_err(|_| "Unable to serialize validated flashcards.".to_string())
+}
+
+fn sanitize_mindmap_node(node: MindMapNode, depth: usize) -> Option<MindMapNode> {
+    let label = node.label.trim().to_string();
+    if label.is_empty() {
+        return None;
+    }
+
+    if depth >= MAX_MINDMAP_DEPTH {
+        return Some(MindMapNode {
+            label,
+            children: Vec::new(),
+        });
+    }
+
+    let mut seen = HashSet::new();
+    let mut children = Vec::new();
+    for child in node.children {
+        let Some(clean_child) = sanitize_mindmap_node(child, depth + 1) else {
+            continue;
+        };
+        let key = normalize_key(&clean_child.label);
+        if key.is_empty() || seen.contains(&key) {
+            continue;
+        }
+        seen.insert(key);
+        children.push(clean_child);
+        if children.len() >= MAX_MINDMAP_CHILDREN {
+            break;
+        }
+    }
+
+    Some(MindMapNode { label, children })
+}
+
+pub(crate) fn validate_mindmap_json(raw: &str) -> Result<String, String> {
+    let mindmap: MindMapData =
+        serde_json::from_str(raw).map_err(|_| "Unable to parse mind map JSON.".to_string())?;
+    let root = sanitize_mindmap_node(mindmap.root, 0)
+        .ok_or_else(|| "Mind map root label was empty after validation.".to_string())?;
+    serde_json::to_string(&MindMapData { root })
+        .map_err(|_| "Unable to serialize validated mind map.".to_string())
+}
+
+pub(crate) fn validate_keywords_json(raw: &str) -> Result<String, String> {
+    let keywords: KeywordsOutput =
+        serde_json::from_str(raw).map_err(|_| "Unable to parse keywords JSON.".to_string())?;
+    let banned = [
+        "lecture",
+        "lectures",
+        "research",
+        "study",
+        "important concept",
+        "topic",
+        "topics",
+    ];
+
+    let mut clean_keywords = Vec::new();
+    let mut seen = HashSet::new();
+    for keyword in keywords.keywords {
+        let trimmed = keyword.trim();
+        let key = normalize_key(trimmed);
+        if trimmed.len() < 3
+            || key.is_empty()
+            || banned.iter().any(|item| *item == key)
+            || seen.contains(&key)
+        {
+            continue;
+        }
+        seen.insert(key);
+        clean_keywords.push(trimmed.to_string());
+        if clean_keywords.len() >= 10 {
+            break;
+        }
+    }
+
+    if clean_keywords.len() < 4 {
+        return Err(format!(
+            "Keyword output must contain at least 4 usable search terms after validation, found {}.",
+            clean_keywords.len()
+        ));
+    }
+
+    serde_json::to_string(&KeywordsOutput {
+        keywords: clean_keywords,
+    })
+    .map_err(|_| "Unable to serialize validated keywords.".to_string())
+}
+
+pub(crate) async fn run_json_stage(
+    client: &OllamaClient,
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    lecture_id: &str,
+    stage: &str,
+    schema: Option<serde_json::Value>,
+    validator: fn(&str) -> Result<String, String>,
+) -> Result<String, String> {
+    let config = GenerateConfig {
+        system: None,
+        format: schema,
+        temperature: Some(0.0),
+        stream: true,
+    };
+
+    let raw = client
+        .generate_with_config(app, model, prompt, lecture_id, stage, &config)
+        .await
+        .map_err(|e| e.to_string())?;
+    let extracted = parse_json_from_response(&raw);
+
+    match validator(&extracted) {
+        Ok(valid) => Ok(valid),
+        Err(validation_error) => {
+            let repair_prompt = format!(
+                "{prompt}\n\nThe previous JSON was invalid for these reasons:\n- {validation_error}\n\nReturn corrected JSON only. Preserve valid content, remove unsupported items, and do not add commentary."
+            );
+            let retry_raw = client
+                .generate_with_config(app, model, &repair_prompt, lecture_id, stage, &config)
+                .await
+                .map_err(|e| e.to_string())?;
+            let retry_extracted = parse_json_from_response(&retry_raw);
+            validator(&retry_extracted)
+        }
+    }
+}
+
+pub(crate) fn merge_notes_sections(section_jsons: &[String]) -> Result<String, String> {
     let mut title = String::new();
     let mut topics: Vec<serde_json::Value> = Vec::new();
     let mut key_terms: Vec<serde_json::Value> = Vec::new();
@@ -220,39 +853,48 @@ fn merge_notes_sections(section_jsons: &[String]) -> Result<String, String> {
         title = "Structured Lecture Notes".to_string();
     }
 
-    serde_json::to_string(&serde_json::json!({
+    let merged = serde_json::to_string(&serde_json::json!({
         "title": title,
         "topics": topics,
         "key_terms": key_terms,
         "takeaways": takeaways,
     }))
-    .map_err(|_| "Unable to serialize merged notes.".to_string())
+    .map_err(|_| "Unable to serialize merged notes.".to_string())?;
+
+    validate_notes_json(&merged)
 }
 
-fn merge_quiz_sections(section_jsons: &[String]) -> Result<String, String> {
-    let mut questions: Vec<serde_json::Value> = Vec::new();
+pub(crate) fn merge_quiz_sections(section_jsons: &[String]) -> Result<String, String> {
+    let mut questions = Vec::new();
 
     for section in section_jsons {
-        let value: serde_json::Value =
-            serde_json::from_str(section).map_err(|_| "Unable to parse quiz section JSON.")?;
-        if let Some(section_questions) =
-            value.get("questions").and_then(serde_json::Value::as_array)
-        {
-            questions.extend(section_questions.iter().cloned());
-        }
+        questions.extend(parse_quiz_questions(section)?);
     }
 
-    for (index, question) in questions.iter_mut().enumerate() {
-        if let Some(object) = question.as_object_mut() {
-            object.insert(
-                "id".to_string(),
-                serde_json::Value::Number(serde_json::Number::from((index + 1) as i64)),
-            );
-        }
+    let quiz = Quiz {
+        questions: select_quiz_questions(questions),
+    };
+
+    validate_quiz_json(
+        &serde_json::to_string(&quiz)
+            .map_err(|_| "Unable to serialize merged quiz.".to_string())?,
+    )
+}
+
+pub(crate) fn merge_flashcards_sections(section_jsons: &[String]) -> Result<String, String> {
+    let mut cards = Vec::new();
+    for section in section_jsons {
+        cards.extend(parse_flashcards(section)?);
     }
 
-    serde_json::to_string(&serde_json::json!({ "questions": questions }))
-        .map_err(|_| "Unable to serialize merged quiz.".to_string())
+    let flashcards = FlashcardsOutput {
+        cards: select_flashcards(cards),
+    };
+
+    validate_flashcards_json(
+        &serde_json::to_string(&flashcards)
+            .map_err(|_| "Unable to serialize merged flashcards.".to_string())?,
+    )
 }
 
 /// Build a short preview from an LLM response (first 200 chars).
@@ -305,9 +947,7 @@ fn collapse_blank_lines(text: &str) -> String {
 }
 
 fn normalise_summary_lead_in(value: &str) -> String {
-    value.trim()
-        .replace(['’', '`'], "'")
-        .to_ascii_lowercase()
+    value.trim().replace(['’', '`'], "'").to_ascii_lowercase()
 }
 
 fn trim_courtesy_prefix(value: &str) -> String {
@@ -362,9 +1002,16 @@ fn is_summary_lead_in(line: &str) -> bool {
 
     matches!(
         current["summary".len()..].trim(),
-        "" | ":" | "-" | "of the lecture" | "of the lecture:" | "of this lecture"
-            | "of this lecture:" | "for the lecture" | "for the lecture:"
-            | "for this lecture" | "for this lecture:"
+        "" | ":"
+            | "-"
+            | "of the lecture"
+            | "of the lecture:"
+            | "of this lecture"
+            | "of this lecture:"
+            | "for the lecture"
+            | "for the lecture:"
+            | "for this lecture"
+            | "for this lecture:"
     )
 }
 
@@ -517,7 +1164,19 @@ async fn run_stage(
     expect_json: bool,
 ) -> Result<String, String> {
     let mut raw = client
-        .generate(app, model, prompt, lecture_id, stage)
+        .generate_with_config(
+            app,
+            model,
+            prompt,
+            lecture_id,
+            stage,
+            &GenerateConfig {
+                system: None,
+                temperature: Some(if expect_json { 0.0 } else { 0.2 }),
+                stream: true,
+                ..GenerateConfig::default()
+            },
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -539,7 +1198,19 @@ async fn run_stage(
         prompt
     );
     let mut retry_raw = client
-        .generate(app, model, &retry_prompt, lecture_id, stage)
+        .generate_with_config(
+            app,
+            model,
+            &retry_prompt,
+            lecture_id,
+            stage,
+            &GenerateConfig {
+                system: None,
+                temperature: Some(0.0),
+                stream: true,
+                ..GenerateConfig::default()
+            },
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -843,16 +1514,7 @@ pub async fn run_full_pipeline_with_options(
         }
     };
 
-    // For all remaining stages we use: summary + first CHUNK_CHARS of transcript
-    // (avoids overwhelming the LLM on very long lectures)
-    let context_text = if is_long {
-        let first_chunk = &chunks[0];
-        format!(
-            "LECTURE SUMMARY:\n{summary_text}\n\nFIRST SECTION OF TRANSCRIPT:\n{first_chunk}\n(Note: this is a long lecture; the above is a representative excerpt.)"
-        )
-    } else {
-        transcript_text.clone()
-    };
+    let context_text = build_generation_context(&summary_text, &transcript_text, &long_sections);
 
     // ─────────────────────────────────────────────────────────────────────────
     // STAGE 2 — Structured Notes
@@ -884,14 +1546,15 @@ pub async fn run_full_pipeline_with_options(
                 );
                 let section_prompt =
                     prompt_templates::structured_notes_prompt(&section_context, &level);
-                let section_json = match run_stage(
+                let section_json = match run_json_stage(
                     &client,
                     &app,
                     &model,
                     &section_prompt,
                     &lecture_id,
                     &sub_stage,
-                    true,
+                    Some(prompt_templates::notes_response_schema()),
+                    validate_notes_json,
                 )
                 .await
                 {
@@ -927,21 +1590,22 @@ pub async fn run_full_pipeline_with_options(
             Ok(merged)
         } else {
             let notes_prompt = prompt_templates::structured_notes_prompt(&context_text, &level);
-            run_stage(
+            run_json_stage(
                 &client,
                 &app,
                 &model,
                 &notes_prompt,
                 &lecture_id,
                 stage,
-                true,
+                Some(prompt_templates::notes_response_schema()),
+                validate_notes_json,
             )
             .await
         }
     }
     .await;
 
-    match notes_result {
+    let notes_json = match notes_result {
         Ok(json) => {
             let preview = make_preview(&json);
             mark_stage_complete(&db, &lecture_id, stage, &preview);
@@ -950,12 +1614,14 @@ pub async fn run_full_pipeline_with_options(
                 let _ = queries::upsert_notes(&conn, &lecture_id, &json);
             }
             store_cached_stage_result(&db, &lecture_id, stage, &transcript_hash, &json);
+            Some(json)
         }
         Err(e) => {
             mark_stage_error(&db, &lecture_id, stage, &e);
             emit_stage(&app, &lecture_id, stage, "error", None, Some(e), 2);
+            None
         }
-    }
+    };
 
     // ─────────────────────────────────────────────────────────────────────────
     // STAGE 3 — Quiz
@@ -986,14 +1652,15 @@ pub async fn run_full_pipeline_with_options(
                     section
                 );
                 let section_prompt = prompt_templates::quiz_prompt(&section_context, &level);
-                let section_json = match run_stage(
+                let section_json = match run_json_stage(
                     &client,
                     &app,
                     &model,
                     &section_prompt,
                     &lecture_id,
                     &sub_stage,
-                    true,
+                    Some(prompt_templates::quiz_response_schema()),
+                    validate_quiz_json,
                 )
                 .await
                 {
@@ -1029,14 +1696,15 @@ pub async fn run_full_pipeline_with_options(
             Ok(merged)
         } else {
             let quiz_prompt = prompt_templates::quiz_prompt(&context_text, &level);
-            run_stage(
+            run_json_stage(
                 &client,
                 &app,
                 &model,
                 &quiz_prompt,
                 &lecture_id,
                 stage,
-                true,
+                Some(prompt_templates::quiz_response_schema()),
+                validate_quiz_json,
             )
             .await
         }
@@ -1074,17 +1742,75 @@ pub async fn run_full_pipeline_with_options(
                 return Ok(cached);
             }
         }
-        let flashcards_prompt = prompt_templates::flashcards_prompt(&context_text, &level);
-        run_stage(
-            &client,
-            &app,
-            &model,
-            &flashcards_prompt,
-            &lecture_id,
-            stage,
-            true,
-        )
-        .await
+        if should_process_by_section {
+            let mut section_flashcards = Vec::new();
+            let total = long_sections.len();
+            for (index, section) in long_sections.iter().enumerate() {
+                let sub_stage = format!("flashcards_section_{}", index + 1);
+                emit_stage(&app, &lecture_id, &sub_stage, "starting", None, None, 3);
+                let section_context = format!(
+                    "LECTURE SUMMARY:\n{summary_text}\n\nSECTION {}/{}:\n{}",
+                    index + 1,
+                    total,
+                    section
+                );
+                let section_prompt = prompt_templates::flashcards_prompt(&section_context, &level);
+                let section_json = match run_json_stage(
+                    &client,
+                    &app,
+                    &model,
+                    &section_prompt,
+                    &lecture_id,
+                    &sub_stage,
+                    Some(prompt_templates::flashcards_response_schema()),
+                    validate_flashcards_json,
+                )
+                .await
+                {
+                    Ok(value) => value,
+                    Err(error) => {
+                        emit_stage(
+                            &app,
+                            &lecture_id,
+                            &sub_stage,
+                            "error",
+                            None,
+                            Some(error.clone()),
+                            3,
+                        );
+                        return Err(error);
+                    }
+                };
+                let section_preview = make_preview(&section_json);
+                emit_stage(
+                    &app,
+                    &lecture_id,
+                    &sub_stage,
+                    "complete",
+                    Some(section_preview),
+                    None,
+                    3,
+                );
+                section_flashcards.push(section_json);
+            }
+
+            let merged = merge_flashcards_sections(&section_flashcards)?;
+            section_flashcards.clear();
+            Ok(merged)
+        } else {
+            let flashcards_prompt = prompt_templates::flashcards_prompt(&context_text, &level);
+            run_json_stage(
+                &client,
+                &app,
+                &model,
+                &flashcards_prompt,
+                &lecture_id,
+                stage,
+                Some(prompt_templates::flashcards_response_schema()),
+                validate_flashcards_json,
+            )
+            .await
+        }
     }
     .await;
 
@@ -1119,15 +1845,18 @@ pub async fn run_full_pipeline_with_options(
                 return Ok(cached);
             }
         }
-        let mindmap_prompt = prompt_templates::mindmap_prompt(&context_text, &level);
-        run_stage(
+        let mindmap_source =
+            build_mindmap_source(&summary_text, notes_json.as_deref(), &context_text);
+        let mindmap_prompt = prompt_templates::mindmap_prompt(&mindmap_source, &level);
+        run_json_stage(
             &client,
             &app,
             &model,
             &mindmap_prompt,
             &lecture_id,
             stage,
-            true,
+            Some(serde_json::Value::String("json".to_string())),
+            validate_mindmap_json,
         )
         .await
     }
@@ -1156,12 +1885,7 @@ pub async fn run_full_pipeline_with_options(
     emit_stage(&app, &lecture_id, stage, "starting", None, None, 5);
     mark_stage_starting(&db, &lecture_id, stage);
 
-    // Extract keywords from the summary for efficiency
-    let keywords_input = if summary_text.is_empty() {
-        &context_text
-    } else {
-        &summary_text
-    };
+    let keywords_input = build_keywords_source(&summary_text, notes_json.as_deref(), &context_text);
     let keywords_result: Result<String, String> = async {
         if options.use_cache {
             if let Some(cached) =
@@ -1170,15 +1894,16 @@ pub async fn run_full_pipeline_with_options(
                 return Ok(cached);
             }
         }
-        let keywords_prompt = prompt_templates::extract_keywords_prompt(keywords_input);
-        run_stage(
+        let keywords_prompt = prompt_templates::extract_keywords_prompt(&keywords_input);
+        run_json_stage(
             &client,
             &app,
             &model,
             &keywords_prompt,
             &lecture_id,
             stage,
-            true,
+            Some(prompt_templates::keywords_response_schema()),
+            validate_keywords_json,
         )
         .await
     }

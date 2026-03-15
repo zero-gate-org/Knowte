@@ -2,6 +2,23 @@
 
 All notable changes to the Knowte project will be documented in this file.
 
+## [Prompt Quality Overhaul] - 2026-03-15
+- Changed: Ollama generation now supports per-request system prompts, JSON schema `format`, and temperature controls so backend stages can request stricter structured outputs.
+- Changed: Prompt templates for summaries, notes, quizzes, flashcards, mind maps, and research keywords now use clearer local-model-oriented instruction scaffolds with explicit rules and examples.
+- Changed: Active pipeline generation now relies on detailed user prompts and few-shot examples instead of broad system-prompt guidance for local models.
+- Added: Pipeline-side validation and repair passes for notes, quizzes, flashcards, mind maps, and keywords before persistence.
+- Added: Long-lecture generation context now uses summary plus section snapshots instead of only the first transcript chunk for downstream stages.
+- Added: Flashcard generation now supports section-by-section processing for long lectures with deduplication and quality-based card selection before save.
+- Changed: Notes generation now explicitly targets comprehensive study-guide output with richer topic coverage, fuller detail fields, and larger key-term/takeaway sections.
+- Added: Structured notes topics can now include `support_materials` blocks for code snippets, formulas, worked examples, and other subject-specific study aids, with frontend and markdown export support.
+- Changed: Mind map generation now prefers a compact notes outline instead of the full notes JSON and uses lightweight JSON mode rather than the previous recursive schema contract.
+- Changed: Keyword extraction now uses summary plus notes instead of summary alone.
+- Files modified:
+  - src-tauri/src/commands/llm.rs
+  - src-tauri/src/pipeline/orchestrator.rs
+  - src-tauri/src/utils/prompt_templates.rs
+  - docs/CHANGELOG.md
+
 ## [Task 6.1] - 2026-03-15
 - Fixed: Notes and flashcards views now normalize malformed stored JSON before rendering so failed LLM outputs fall back to safe empty/error states instead of crashing the React tree
 - Fixed: Quiz loading now normalizes malformed stored question JSON and treats empty/invalid decks as safe empty/error states instead of crashing the quiz player

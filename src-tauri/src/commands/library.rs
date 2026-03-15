@@ -76,6 +76,18 @@ impl From<LibraryError> for String {
 }
 
 #[derive(Deserialize, Default)]
+struct NotesSupportMaterial {
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    content: String,
+    #[serde(default)]
+    language: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
 struct NotesTopic {
     #[serde(default)]
     heading: String,
@@ -85,6 +97,8 @@ struct NotesTopic {
     details: String,
     #[serde(default)]
     examples: Vec<String>,
+    #[serde(default)]
+    support_materials: Vec<NotesSupportMaterial>,
 }
 
 #[derive(Deserialize, Default)]
@@ -347,6 +361,45 @@ fn notes_to_markdown(raw: &str) -> Result<String, LibraryError> {
             for example in &topic.examples {
                 if !example.trim().is_empty() {
                     markdown.push_str(&format!("> {}\n\n", example.trim()));
+                }
+            }
+        }
+
+        if !topic.support_materials.is_empty() {
+            markdown.push_str("### Support Materials\n\n");
+            for material in &topic.support_materials {
+                if material.content.trim().is_empty() {
+                    continue;
+                }
+                let label = if material.kind.trim().is_empty() {
+                    "Reference"
+                } else {
+                    material.kind.trim()
+                };
+                let title = if material.title.trim().is_empty() {
+                    "Support Material"
+                } else {
+                    material.title.trim()
+                };
+                markdown.push_str(&format!("#### {}: {}\n\n", label, title));
+
+                match label {
+                    "code" => {
+                        let language = material.language.as_deref().unwrap_or("").trim();
+                        markdown.push_str(&format!(
+                            "```{}\n{}\n```\n\n",
+                            language,
+                            material.content.trim()
+                        ));
+                    }
+                    "formula" | "table" => {
+                        markdown
+                            .push_str(&format!("```text\n{}\n```\n\n", material.content.trim()));
+                    }
+                    _ => {
+                        markdown.push_str(material.content.trim());
+                        markdown.push_str("\n\n");
+                    }
                 }
             }
         }

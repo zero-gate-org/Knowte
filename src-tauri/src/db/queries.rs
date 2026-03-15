@@ -826,32 +826,31 @@ pub fn get_lecture_keywords(
         Ok(Some(json)) => {
             // The LLM returns { "keywords": [...] } — try that first.
             // Fall back to a bare array for older rows that were already normalised.
-            let keywords: Vec<String> = if let Ok(obj) =
-                serde_json::from_str::<serde_json::Value>(&json)
-            {
-                match &obj {
-                    serde_json::Value::Object(map) => {
-                        // {"keywords": [...]} — the standard LLM output shape
-                        map.get("keywords")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                    .collect()
-                            })
-                            .unwrap_or_default()
+            let keywords: Vec<String> =
+                if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&json) {
+                    match &obj {
+                        serde_json::Value::Object(map) => {
+                            // {"keywords": [...]} — the standard LLM output shape
+                            map.get("keywords")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect()
+                                })
+                                .unwrap_or_default()
+                        }
+                        serde_json::Value::Array(arr) => {
+                            // Bare array — legacy / manually normalised rows
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        }
+                        _ => vec![],
                     }
-                    serde_json::Value::Array(arr) => {
-                        // Bare array — legacy / manually normalised rows
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect()
-                    }
-                    _ => vec![],
-                }
-            } else {
-                vec![]
-            };
+                } else {
+                    vec![]
+                };
             Ok(keywords)
         }
         Ok(None) => Ok(vec![]),

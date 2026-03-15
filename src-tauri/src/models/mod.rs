@@ -5,11 +5,21 @@ use serde::{Deserialize, Serialize};
 // ─── Structured Notes ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotesSupportMaterial {
+    pub kind: String,
+    pub title: String,
+    pub content: String,
+    pub language: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotesTopic {
     pub heading: String,
     pub key_points: Vec<String>,
     pub details: String,
     pub examples: Vec<String>,
+    #[serde(default)]
+    pub support_materials: Vec<NotesSupportMaterial>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

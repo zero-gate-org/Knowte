@@ -1,6 +1,7 @@
 use crate::commands::settings::get_settings;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter};
 use thiserror::Error;
 use tokio::time::{sleep, Duration};
@@ -68,6 +69,25 @@ pub struct OllamaClient {
     client: reqwest::Client,
 }
 
+#[derive(Debug, Clone)]
+pub struct GenerateConfig {
+    pub system: Option<String>,
+    pub format: Option<Value>,
+    pub temperature: Option<f32>,
+    pub stream: bool,
+}
+
+impl Default for GenerateConfig {
+    fn default() -> Self {
+        Self {
+            system: None,
+            format: None,
+            temperature: None,
+            stream: true,
+        }
+    }
+}
+
 impl OllamaClient {
     pub fn new(base_url: String, timeout_secs: u64) -> Self {
         let timeout_secs = clamp_timeout_secs(timeout_secs);
@@ -105,17 +125,31 @@ impl OllamaClient {
         prompt: &str,
         lecture_id: &str,
         stage: &str,
+        config: &GenerateConfig,
     ) -> Result<String, LlmError> {
         if !self.is_available().await {
             return Err(LlmError::OllamaNotRunning(self.base_url.clone()));
         }
 
         let url = format!("{}/api/generate", self.base_url);
-        let body = serde_json::json!({
-            "model": model,
-            "prompt": prompt,
-            "stream": true,
-        });
+        let mut body = Map::new();
+        body.insert("model".to_string(), Value::String(model.to_string()));
+        body.insert("prompt".to_string(), Value::String(prompt.to_string()));
+        body.insert("stream".to_string(), Value::Bool(config.stream));
+
+        if let Some(system) = config
+            .system
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            body.insert("system".to_string(), Value::String(system.clone()));
+        }
+        if let Some(format) = config.format.as_ref() {
+            body.insert("format".to_string(), format.clone());
+        }
+        if let Some(temperature) = config.temperature {
+            body.insert("options".to_string(), json!({ "temperature": temperature }));
+        }
 
         let response = self
             .client
@@ -225,11 +259,34 @@ impl OllamaClient {
         lecture_id: &str,
         stage: &str,
     ) -> Result<String, LlmError> {
+        self.generate_with_config(
+            app,
+            model,
+            prompt,
+            lecture_id,
+            stage,
+            &GenerateConfig {
+                stream: true,
+                ..GenerateConfig::default()
+            },
+        )
+        .await
+    }
+
+    pub async fn generate_with_config(
+        &self,
+        app: &AppHandle,
+        model: &str,
+        prompt: &str,
+        lecture_id: &str,
+        stage: &str,
+        config: &GenerateConfig,
+    ) -> Result<String, LlmError> {
         let mut last_error: Option<LlmError> = None;
 
         for attempt in 0..=MAX_RETRIES {
             match self
-                .generate_once(app, model, prompt, lecture_id, stage)
+                .generate_once(app, model, prompt, lecture_id, stage, config)
                 .await
             {
                 Ok(output) => return Ok(output),

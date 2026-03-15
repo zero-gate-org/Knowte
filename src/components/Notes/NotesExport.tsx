@@ -14,6 +14,27 @@ function escape(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function supportMaterialLabel(kind: string): string {
+  switch (kind) {
+    case "code":
+      return "Code";
+    case "formula":
+      return "Formula";
+    case "worked_example":
+      return "Worked Example";
+    case "timeline":
+      return "Timeline";
+    case "table":
+      return "Table";
+    case "diagram_notes":
+      return "Diagram Notes";
+    case "case_study":
+      return "Case Study";
+    default:
+      return "Reference";
+  }
+}
+
 /** Returns only the body content (no <html>/<head>/<body> wrappers). */
 function buildPrintBodyHtml(notes: StructuredNotes, summary?: string): string {
   const topics = notes.topics ?? [];
@@ -45,6 +66,22 @@ function buildPrintBodyHtml(notes: StructuredNotes, summary?: string): string {
     if (examples.length > 0) {
       for (const ex of examples) {
         html += `<blockquote><strong>Example:</strong> ${escape(ex)}</blockquote>\n`;
+      }
+    }
+
+    const supportMaterials = topic.support_materials ?? [];
+    if (supportMaterials.length > 0) {
+      html += `<h3>Support Materials</h3>\n`;
+      for (const material of supportMaterials) {
+        const label = supportMaterialLabel(material.kind);
+        html += `<section class="__print-support">\n`;
+        html += `<p><strong>${escape(label)}:</strong> ${escape(material.title)}</p>\n`;
+        if (material.kind === "code" || material.kind === "formula" || material.kind === "table") {
+          html += `<pre>${escape(material.content)}</pre>\n`;
+        } else {
+          html += `<div>${escape(material.content).replace(/\n/g, "<br/>")}</div>\n`;
+        }
+        html += `</section>\n`;
       }
     }
   }
@@ -130,6 +167,23 @@ const PRINT_CSS = `
       font-style: italic;
       page-break-inside: avoid;
     }
+    #__notes-print-portal__ pre {
+      white-space: pre-wrap;
+      background: #f3f4f6;
+      border: 0.5pt solid #d1d5db;
+      border-radius: 8px;
+      padding: 0.8em 1em;
+      overflow: hidden;
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 9.5pt;
+      line-height: 1.6;
+      color: #111827;
+      page-break-inside: avoid;
+    }
+    #__notes-print-portal__ .__print-support {
+      margin: 0.8em 0;
+      page-break-inside: avoid;
+    }
     #__notes-print-portal__ table {
       border-collapse: collapse;
       width: 100%;
@@ -188,6 +242,22 @@ function notesToMarkdown(notes: StructuredNotes, summary?: string): string {
       lines.push("### Examples", "");
       for (const ex of examples) {
         lines.push(`> ${ex}`, "");
+      }
+    }
+
+    const supportMaterials = topic.support_materials ?? [];
+    if (supportMaterials.length > 0) {
+      lines.push("### Support Materials", "");
+      for (const material of supportMaterials) {
+        const label = supportMaterialLabel(material.kind);
+        lines.push(`#### ${label}: ${material.title}`, "");
+        if (material.kind === "code") {
+          lines.push(`\`\`\`${material.language ?? ""}`.trimEnd(), material.content, "```", "");
+        } else if (material.kind === "formula" || material.kind === "table") {
+          lines.push("```text", material.content, "```", "");
+        } else {
+          lines.push(material.content, "");
+        }
       }
     }
   }
