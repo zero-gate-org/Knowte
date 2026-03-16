@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectValue, SelectTrigger } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Plus, AlertCircle } from "lucide-react";
 
 type SortOption = "newest" | "oldest" | "alphabetical";
 type StatusFilter = "all" | "complete" | "processing" | "error";
@@ -291,7 +293,9 @@ export default function LectureLibrary() {
           <Button
             type="button"
             onClick={() => navigate("/upload")}
+            className="gap-2"
           >
+            <Plus className="h-4 w-4" />
             Add Knowte
           </Button>
         }
@@ -341,9 +345,11 @@ export default function LectureLibrary() {
       </Card>
 
       {error && (
-        <div className="rounded-lg px-4 py-3 text-sm" style={{ border: "1px solid var(--color-error-muted)", background: "var(--color-error-muted)", color: "var(--color-error)" }}>
-          {error}
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-4 duration-300">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Library Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {isLoading ? (
@@ -428,8 +434,8 @@ export default function LectureLibrary() {
 
                   {activeMenuLectureId === lecture.id && (
                     <div
-                      className="absolute right-0 z-20 mt-2 w-44 rounded-md p-1 shadow-lg"
-                      style={{ border: "1px solid var(--border-strong)", background: "var(--bg-surface-overlay)" }}
+                      className="absolute right-0 z-20 mt-2 w-44 rounded-md p-1 shadow-lg border border-border bg-popover-foreground/5 backdrop-blur-md"
+                      style={{ background: "var(--popover)" }}
                       onClick={(event) => event.stopPropagation()}
                     >
                       <button

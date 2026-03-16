@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { HOTKEY_EVENT_NAMES } from "../../lib/hotkeys";
 import { startRecording as apiStartRecording, stopRecording as apiStopRecording } from "../../lib/tauriApi";
 import type { AudioFileMetadata } from "../../lib/types";
+import { Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -202,22 +203,27 @@ export default function LiveRecorder({
             onClick={() => void handleStartRecording()}
             disabled={disabled || isBusy}
             aria-label="Start recording"
-            className="flex h-20 w-20 items-center justify-center rounded-full text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: "var(--color-error)" }}
+            variant="destructive"
+            className="h-20 w-20 rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 disabled:opacity-50"
           >
-            Record
+            <div className="flex flex-col items-center gap-1">
+              <Mic className="size-6" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Record</span>
+            </div>
           </Button>
         ) : (
           <Button
-            variant="ghost"
+            variant="secondary"
             type="button"
             onClick={() => void handleStopRecording()}
             disabled={isBusy}
             aria-label="Stop recording"
-            className="flex h-20 w-20 items-center justify-center rounded-full text-sm font-semibold shadow-lg transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: "var(--bg-elevated)", color: "var(--text-primary)" }}
+            className="h-20 w-20 rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 disabled:opacity-50"
           >
-            Stop
+            <div className="flex flex-col items-center gap-1">
+              <Square className="size-6 fill-current" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Stop</span>
+            </div>
           </Button>
         )}
 

@@ -16,6 +16,8 @@ import {
   type ExplainStreamEvent,
 } from "../../lib/types";
 import { useSettingsStore, useToastStore } from "../../stores";
+import { Button } from "@/components/ui/button";
+import { History } from "lucide-react";
 import ExplainPanel from "./ExplainPanel";
 import TextSelectionToolbar from "./TextSelectionToolbar";
 
@@ -487,13 +489,17 @@ export default function ExplainableTextView({
       />
 
       {!isPanelOpen && history.length > 0 && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setIsPanelOpen(true)}
-          className="print:hidden fixed right-0 top-1/2 z-[60] -translate-y-1/2 rounded-l-lg border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 px-2 py-2 text-[11px] font-medium text-[var(--text-secondary)] shadow-lg transition-colors hover:bg-[var(--bg-elevated)]"
+          className="print:hidden fixed right-0 top-1/2 z-60 -translate-y-1/2 rounded-l-xl rounded-r-none border-r-0 bg-card/90 px-1.5 py-4 h-auto flex flex-col items-center gap-2 shadow-xl hover:translate-x-0 transition-transform duration-300 translate-x-1"
         >
-          Explain Panel
-        </button>
+          <History className="h-4 w-4 text-primary" />
+          <span className="[writing-mode:vertical-rl] text-[10px] font-bold uppercase tracking-widest text-foreground/70">
+            History
+          </span>
+        </Button>
       )}
     </>
   );

@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, AlertCircle } from "lucide-react";
 
 type UploadTab = "upload" | "record";
 type QueueStatus = "importing" | "waiting" | "processing" | "complete" | "error";
@@ -657,8 +659,7 @@ export default function AudioUploader() {
       />
 
       <div
-        className="inline-flex rounded-lg p-1 shadow-sm"
-        style={{ border: "1px solid var(--border-default)", background: "var(--bg-elevated)" }}
+        className="inline-flex rounded-lg p-1 shadow-sm border border-border bg-muted/50"
         role="tablist"
         aria-label="Knowte input modes"
       >
@@ -731,7 +732,8 @@ export default function AudioUploader() {
                     isYoutubeImporting ||
                     youtubeUrl.trim().length === 0
                   }
-                  className="whitespace-nowrap bg-red-600 hover:bg-red-700 text-white"
+                  variant="destructive"
+                  className="whitespace-nowrap"
                 >
                   {isYoutubeImporting ? "Importing..." : "Add to Queue"}
                 </Button>
@@ -751,25 +753,35 @@ export default function AudioUploader() {
       </Card>
 
       {(isUploading || isRecording) && (
-        <div className="rounded-lg px-4 py-3 text-sm" style={{ border: "1px solid var(--color-info-muted)", background: "var(--color-info-muted)", color: "var(--color-info)" }}>
-          {isUploading
-            ? isYoutubeImporting
-              ? "Importing from YouTube..."
-              : "Importing knowte files..."
-            : "Recording in progress..."}
-        </div>
+        <Alert variant="default" className="animate-in fade-in slide-in-from-top-4 duration-300">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <AlertTitle>Action in Progress</AlertTitle>
+          <AlertDescription>
+            {isUploading
+              ? isYoutubeImporting
+                ? "Importing from YouTube..."
+                : "Importing knowte files..."
+              : "Recording in progress..."}
+          </AlertDescription>
+        </Alert>
       )}
 
       {isProcessingLecture && (
-        <div className="rounded-lg px-4 py-3 text-sm" style={{ border: "1px solid var(--color-info-muted)", background: "var(--color-info-muted)", color: "var(--color-info)" }}>
-          {processHint ?? "Processing queue..."}
-        </div>
+        <Alert variant="default" className="animate-in fade-in slide-in-from-top-4 duration-300">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <AlertTitle>Pipeline Active</AlertTitle>
+          <AlertDescription>
+            {processHint ?? "Processing queue..."}
+          </AlertDescription>
+        </Alert>
       )}
 
       {error && (
-        <div className="rounded-lg px-4 py-3 text-sm" style={{ border: "1px solid var(--color-error-muted)", background: "var(--color-error-muted)", color: "var(--color-error)" }}>
-          {error}
-        </div>
+        <Alert variant="destructive" className="animate-in shake-1 duration-300">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Encountered</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {hasQueueItems && (
@@ -787,7 +799,6 @@ export default function AudioUploader() {
               type="button"
               onClick={() => void handleProcessAll()}
               disabled={isUploading || isRecording || isBatchRunning || waitingCount === 0}
-              className="bg-green-600 hover:bg-green-700 text-white"
             >
               {isBatchRunning ? "Processing Queue..." : "Process All"}
             </Button>

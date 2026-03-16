@@ -227,6 +227,7 @@ export default function DropZone({
           onClick={() => void handleBrowseClick()}
           disabled={disabled || isProcessing}
           className="mt-6"
+          variant="secondary"
         >
           {isProcessing ? "Importing..." : "Browse files"}
         </Button>

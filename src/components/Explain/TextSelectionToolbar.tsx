@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Sparkles, Copy, Plus } from "lucide-react";
+
 interface ToolbarPosition {
   left: number;
   top: number;
@@ -28,35 +31,43 @@ export default function TextSelectionToolbar({
     <div
       role="toolbar"
       aria-label="Selected text actions"
-      className="print:hidden fixed z-[70] -translate-x-1/2 -translate-y-full rounded-xl border border-[var(--border-default)]/90 bg-[var(--bg-surface-overlay)]/95 p-1.5 shadow-2xl backdrop-blur"
+      className="print:hidden fixed z-70 -translate-x-1/2 -translate-y-full rounded-full border border-border bg-popover/95 p-1 shadow-xl backdrop-blur-md animate-in fade-in zoom-in duration-200"
       style={{ left: position.left, top: position.top }}
       onMouseDown={(event) => event.preventDefault()}
     >
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
+      <div className="flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onExplain}
           disabled={disableActions}
-          className="rounded-md bg-[var(--accent-primary)] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--accent-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-8 rounded-full px-3 text-xs gap-1.5 hover:bg-primary hover:text-primary-foreground"
         >
+          <Sparkles className="h-3 w-3" />
           Explain
-        </button>
-        <button
-          type="button"
+        </Button>
+        <div className="h-4 w-px bg-border mx-0.5" />
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onAddToFlashcards}
           disabled={disableActions}
-          className="rounded-md bg-[var(--color-warning)] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-warning)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-8 rounded-full px-3 text-xs gap-1.5 hover:bg-accent hover:text-accent-foreground"
         >
-          Add to Flashcards
-        </button>
-        <button
-          type="button"
+          <Plus className="h-3 w-3" />
+          Flashcard
+        </Button>
+        <div className="h-4 w-px bg-border mx-0.5" />
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onCopy}
           disabled={disableActions}
-          className="rounded-md bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--border-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-8 rounded-full px-3 text-xs gap-1.5"
         >
+          <Copy className="h-3 w-3" />
           Copy
-        </button>
+        </Button>
       </div>
     </div>
   );

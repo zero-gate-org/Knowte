@@ -59,7 +59,7 @@ function renderSummaryBlock(block: SummaryBlock, index: number) {
 
   if (block.type === "paragraph") {
     return (
-      <p key={index} className="text-muted-foreground leading-7">
+      <p key={index} className="text-foreground/90 leading-7">
         {renderInlineMarkdown(block.text)}
       </p>
     );
@@ -71,7 +71,7 @@ function renderSummaryBlock(block: SummaryBlock, index: number) {
         {block.items.map((item, itemIndex) => (
           <li key={itemIndex} className="flex items-start gap-3">
             <span className="mt-2 flex-shrink-0 w-2 h-2 rounded-full bg-primary" />
-            <span className="text-muted-foreground leading-7">{renderInlineMarkdown(item)}</span>
+            <span className="text-foreground/90 leading-7">{renderInlineMarkdown(item)}</span>
           </li>
         ))}
       </ul>
@@ -85,7 +85,7 @@ function renderSummaryBlock(block: SummaryBlock, index: number) {
           <span className="flex-shrink-0 w-6 h-6 rounded-full bg-muted text-muted-foreground text-sm font-semibold flex items-center justify-center">
             {itemIndex + 1}
           </span>
-          <span className="text-muted-foreground leading-7">{renderInlineMarkdown(item)}</span>
+          <span className="text-foreground/90 leading-7">{renderInlineMarkdown(item)}</span>
         </li>
       ))}
     </ol>
@@ -153,7 +153,7 @@ function SupportMaterialCard({ material }: { material: NotesSupportMaterial }) {
             {renderMultilineText(material.content)}
           </div>
         ) : (
-          <div className="rounded-lg bg-card px-4 py-3 text-sm leading-7 text-muted-foreground whitespace-pre-wrap">
+          <div className="rounded-lg bg-card px-4 py-3 text-sm leading-7 text-foreground/80 whitespace-pre-wrap">
             {renderMultilineText(material.content)}
           </div>
         )}
@@ -201,7 +201,7 @@ function CollapsibleTopic({ topic, topicIndex }: CollapsibleTopicProps) {
               {keyPoints.map((point, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <span className="mt-2 flex-shrink-0 w-2 h-2 rounded-full bg-primary" />
-                  <span className="text-muted-foreground leading-7">{point}</span>
+                  <span className="text-foreground/90 leading-7">{point}</span>
                 </li>
               ))}
             </ul>
@@ -209,7 +209,7 @@ function CollapsibleTopic({ topic, topicIndex }: CollapsibleTopicProps) {
 
           {/* Details paragraph */}
           {topic.details && (
-            <p className="text-muted-foreground leading-7 text-[0.95rem]">{topic.details}</p>
+            <p className="text-foreground/80 leading-7 text-[0.95rem]">{topic.details}</p>
           )}
 
           {/* Examples */}
@@ -218,13 +218,13 @@ function CollapsibleTopic({ topic, topicIndex }: CollapsibleTopicProps) {
               {examples.map((ex, i) => (
                 <div
                   key={i}
-                  className="bg-muted/50 border border-border rounded-xl px-5 py-4 backdrop-blur-sm"
+                  className="bg-muted border border-border rounded-xl px-5 py-4"
                 >
                   <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground"></span>
                     Example
                   </p>
-                  <p className="text-muted-foreground text-[0.95rem] leading-relaxed">{ex}</p>
+                  <p className="text-foreground/90 text-[0.95rem] leading-relaxed">{ex}</p>
                 </div>
               ))}
             </div>
@@ -274,7 +274,7 @@ function KeyTermsTable({ terms }: { terms: NotesTerm[] }) {
                 <td className="px-5 py-4 font-semibold text-primary align-top border-t border-border/50">
                   {item.term}
                 </td>
-                <td className="px-5 py-4 text-muted-foreground leading-loose border-t border-border/50">
+                <td className="px-5 py-4 text-foreground/90 leading-loose border-t border-border/50">
                   {item.definition}
                 </td>
               </tr>
@@ -299,7 +299,7 @@ function TakeawaysBox({ takeaways }: { takeaways: string[] }) {
               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-background border border-border text-foreground text-sm font-bold flex items-center justify-center shadow-sm">
                 {i + 1}
               </span>
-              <span className="text-muted-foreground leading-7">{t}</span>
+              <span className="text-foreground/90 leading-7">{t}</span>
             </li>
           ))}
         </ol>
