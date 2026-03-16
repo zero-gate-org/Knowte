@@ -1,809 +1,275 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
-
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Knowte | Transform lecture audio into structured learning materials</title>
-    <meta name="description"
-        content="Knowte is a desktop application that turns lecture recordings into structured notes, interactive quizzes, flashcards, mind maps, and related research papers. 100% private, fully offline.">
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="./assets/Knowte.png">
-    <link rel="apple-touch-icon" href="./assets/Knowte.png">
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="./assets/output.css" rel="stylesheet">
-    <!-- GSAP for animations -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        /* Define clash display font-face if external isn't available, but we will just use Outfit for both right now to be safe, or local clash */
-        @font-face {
-            font-family: 'Clash Display';
-            src: url('https://fonts.cdnfonts.com/s/83893/ClashDisplay-Bold.woff') format('woff');
-            font-weight: 700;
-            font-style: normal;
-        }
-
-        @font-face {
-            font-family: 'Clash Display';
-            src: url('https://fonts.cdnfonts.com/s/83893/ClashDisplay-Medium.woff') format('woff');
-            font-weight: 500;
-            font-style: normal;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowte — Turn Lectures Into Learning, Offline.</title>
+  <meta name="description" content="Transform lecture audio into structured notes, quizzes, flashcards, and mind maps. 100% local, 100% private. Powered by Ollama and Whisper.">
+  <meta name="keywords" content="lecture notes, AI transcription, offline learning, Ollama, whisper, flashcards, mind map, quiz generator">
+  <link rel="icon" type="image/png" href="assets/Knowte.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Cormorant+Garamond:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/output.css">
 </head>
+<body class="bg-[#0a0a0a] text-white font-sans antialiased overflow-x-hidden">
 
-<body class="antialiased selection:bg-primary selection:text-white">
+  <!-- Noise overlay -->
+  <div class="fixed inset-0 pointer-events-none opacity-[0.03] z-[100]" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noise%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noise)%22/%3E%3C/svg%3E');"></div>
 
-    <!-- Navigation -->
-    <nav class="fixed w-full z-50 top-0 pt-6 px-6">
-        <div class="max-w-7xl mx-auto flex items-center justify-between neumorphic px-6 py-4">
-            <div class="flex items-center gap-3">
-                <img src="./assets/Knowte.png" alt="Knowte Logo"
-                    class="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(58,37,168,0.5)]">
-                <span class="text-2xl font-bold font-display text-gradient tracking-wide">Knowte</span>
-            </div>
-            <div class="hidden md:flex items-center gap-8 font-medium">
-                <a href="#features" class="hover:text-primary transition-colors">Features</a>
-                <a href="#download" class="hover:text-primary transition-colors">Download</a>
-                <a href="https://github.com/GxAditya/Knowte" target="_blank"
-                    class="hover:text-primary transition-colors">GitHub</a>
-            </div>
-            <a href="#download" class="neumorphic-btn px-6 py-2.5 font-semibold text-primary flex items-center gap-2">
-                <i data-lucide="download" class="w-4 h-4"></i> Get App
-            </a>
+  <!-- Navbar -->
+  <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-500">
+    <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+      <!-- Logo -->
+      <a href="#" class="flex items-center gap-3 group">
+        <img src="assets/Knowte.png" alt="Knowte" class="w-9 h-9 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+        <span class="font-display font-bold text-xl text-amber-400">Knowte</span>
+      </a>
+      
+      <!-- Centered Nav Links -->
+      <div class="hidden md:flex items-center justify-center flex-1">
+        <div class="flex items-center gap-10">
+          <a href="#features" class="text-sm text-zinc-400 hover:text-white transition-colors duration-300">Features</a>
+          <a href="#how-it-works" class="text-sm text-zinc-400 hover:text-white transition-colors duration-300">How it Works</a>
+          <a href="#tech" class="text-sm text-zinc-400 hover:text-white transition-colors duration-300">Tech Stack</a>
+          <a href="#privacy" class="text-sm text-zinc-400 hover:text-white transition-colors duration-300">Privacy</a>
         </div>
-    </nav>
+      </div>
+      
+      <!-- Download Button -->
+      <a href="#downloads" class="btn-primary hidden md:inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.4)]">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+        Download
+      </a>
+      
+      <!-- Mobile Menu Button -->
+      <button id="mobile-toggle" class="md:hidden text-zinc-400 hover:text-white" aria-label="Menu">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden md:hidden bg-zinc-900/95 backdrop-blur-xl mx-4 rounded-2xl p-5 mb-2 border border-zinc-800">
+      <a href="#features" class="block py-3 text-zinc-400 hover:text-white transition-colors">Features</a>
+      <a href="#how-it-works" class="block py-3 text-zinc-400 hover:text-white transition-colors">How it Works</a>
+      <a href="#tech" class="block py-3 text-zinc-400 hover:text-white transition-colors">Tech Stack</a>
+      <a href="#privacy" class="block py-3 text-zinc-400 hover:text-white transition-colors">Privacy</a>
+      <a href="#downloads" class="block mt-4 text-center bg-amber-500 text-black px-5 py-3 rounded-full text-sm font-semibold">Download</a>
+    </div>
+  </nav>
 
-    <!-- Hero Section -->
-    <section class="min-h-screen pt-32 pb-20 px-6 flex flex-col items-center justify-center relative overflow-hidden">
-        <!-- Decorative Background Elements Removed -->
-
-        <div class="max-w-5xl mx-auto text-center hero-content">
-            <div
-                class="inline-block neumorphic-inset px-6 py-2 rounded-full mb-8 text-sm font-semibold tracking-wider text-primary uppercase">
-                100% Private, Fully Offline AI Study App
-            </div>
-            <h1 class="text-5xl md:text-7xl font-bold font-display mb-6 leading-tight">
-                Transform lecture audio into <br />
-                <span class="text-gradient">structured learning</span>.
-            </h1>
-            <p class="text-xl md:text-2xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed">
-                Knowte turns recordings into structured notes, quizzes, flashcards, mind maps, and research papers—all
-                processed locally on your machine.
-            </p>
-
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-6">
-                <a href="#download"
-                    class="neumorphic-primary px-8 py-4 text-lg font-bold flex items-center gap-3 w-full sm:w-auto justify-center">
-                    <i data-lucide="download" class="w-5 h-5"></i> Download Now
-                </a>
-                <a href="https://github.com/GxAditya/Knowte" target="_blank"
-                    class="neumorphic-btn px-8 py-4 text-lg font-bold flex items-center gap-3 w-full sm:w-auto justify-center text-gray-700">
-                    <i data-lucide="github" class="w-5 h-5"></i> View Source
-                </a>
-            </div>
+  <!-- Hero -->
+  <section class="relative min-h-screen flex items-center justify-center pt-24 overflow-hidden">
+    <!-- Animated background -->
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(245,158,11,0.08)_0%,transparent_50%)]"></div>
+      <div class="absolute top-1/4 -left-32 w-96 h-96 bg-amber-500/5 rounded-full blur-[120px] animate-pulse-slow"></div>
+      <div class="absolute bottom-1/4 -right-32 w-96 h-96 bg-amber-500/3 rounded-full blur-[120px] animate-pulse-slow" style="animation-delay: 3s;"></div>
+      <!-- Grid pattern -->
+      <div class="absolute inset-0 opacity-[0.015]" style="background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 60px 60px;"></div>
+    </div>
+    
+    <div class="relative z-10 max-w-6xl mx-auto px-6 text-center">
+      <!-- Badge -->
+      <div class="reveal inline-flex items-center gap-3 bg-zinc-900/60 backdrop-blur-sm rounded-full px-5 py-2 mb-10 border border-zinc-800">
+        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+        <span class="text-xs font-medium text-zinc-300 tracking-wide">100% LOCAL • 100% PRIVATE • NO CLOUD</span>
+      </div>
+      
+      <!-- Headline -->
+      <h1 class="reveal font-serif text-5xl sm:text-6xl lg:text-7xl leading-[0.95] tracking-tight mb-8" style="animation-delay: 0.1s;">
+        <span class="block text-zinc-100 font-normal">Turn Lectures</span>
+        <span class="block text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-500 to-amber-400 italic font-normal">Into Learning</span>
+      </h1>
+      
+      <!-- Subheadline -->
+      <p class="reveal text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-12" style="animation-delay: 0.2s;">
+        Record or upload any lecture. Knowte transcribes it, then generates notes, quizzes, flashcards, mind maps, and research papers — all powered by AI running <em class="text-amber-400">entirely on your machine</em>.
+      </p>
+      
+      <!-- CTA Buttons -->
+      <div class="reveal flex flex-col sm:flex-row items-center justify-center gap-5" style="animation-delay: 0.3s;">
+        <a href="https://github.com/GxAditya/Knowte/releases" target="_blank" class="btn-primary bg-amber-500 hover:bg-amber-400 text-black px-10 py-4 rounded-full text-base font-semibold shadow-[0_0_40px_rgba(245,158,11,0.3)] hover:shadow-[0_0_60px_rgba(245,158,11,0.5)] transition-all duration-300">
+          Download for Free
+        </a>
+        <a href="https://github.com/GxAditya/Knowte" target="_blank" class="inline-flex items-center gap-3 bg-zinc-900/60 backdrop-blur-sm px-8 py-4 rounded-full text-base font-medium text-zinc-300 hover:text-white transition-all duration-300 border border-zinc-800 hover:border-zinc-700">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      
+      <!-- App mockup with floating effect -->
+      <div class="reveal mt-20" style="animation-delay: 0.4s;">
+        <div class="relative mx-auto max-w-5xl">
+          <div class="absolute -inset-8 bg-gradient-to-r from-amber-500/10 via-transparent to-amber-500/10 rounded-3xl blur-3xl"></div>
+          <div class="relative rounded-2xl overflow-hidden shadow-2xl border border-zinc-800/50">
+            <img src="assets/app-mockup.png" alt="Knowte App Interface" class="w-full">
+          </div>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- Featured App Graphic / Animation -->
-        <div class="mt-20 w-full max-w-4xl mx-auto neumorphic p-4 hero-graphic relative">
-            <div
-                class="neumorphic-inset rounded-2xl overflow-hidden aspect-video flex items-center justify-center bg-bg border border-white/50 relative">
-                <img src="./assets/Knowte.gif" alt="Knowte App Demo"
-                    class="w-full h-full object-cover opacity-90 mix-blend-multiply">
+  <!-- Features -->
+  <section id="features" class="relative py-32" style="background: linear-gradient(180deg, #0a0a0a 0%, #111 100%);">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center mb-20">
+        <p class="reveal text-amber-500 text-sm font-semibold tracking-[0.2em] uppercase mb-4">Features</p>
+        <h2 class="reveal font-display font-bold text-4xl lg:text-6xl tracking-tight" style="animation-delay: 0.1s;">
+          <span class="text-zinc-100">Everything You Need to</span><br>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Learn Smarter</span>
+        </h2>
+        <p class="reveal mt-6 text-zinc-400 text-lg max-w-xl mx-auto">From raw audio to study-ready materials in minutes.</p>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5" id="features-grid"></div>
+    </div>
+  </section>
 
-                <!-- Floating Elements over graphic -->
-                <div class="absolute -left-6 top-1/4 neumorphic p-4 rounded-xl flex items-center gap-3"
-                    style="animation-delay: 0.5s">
-                    <div class="w-10 h-10 rounded-full neumorphic-inset flex items-center justify-center text-primary">
-                        <i data-lucide="mic"></i>
-                    </div>
-                    <span class="font-semibold text-sm">Recording active...</span>
-                </div>
-
-                <div class="absolute -right-6 bottom-1/4 neumorphic p-4 rounded-xl flex items-center gap-3"
-                    style="animation-delay: 1.5s">
-                    <div class="w-10 h-10 rounded-full neumorphic-inset flex items-center justify-center text-accent">
-                        <i data-lucide="brain"></i>
-                    </div>
-                    <span class="font-semibold text-sm">Ollama Generating...</span>
-                </div>
-            </div>
+  <!-- Demo GIF -->
+  <section class="relative py-32 overflow-hidden" style="background: #111;">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(245,158,11,0.04)_0%,transparent_60%)]"></div>
+    </div>
+    <div class="max-w-5xl mx-auto px-6 text-center relative z-10">
+      <p class="reveal text-amber-500 text-sm font-semibold tracking-[0.2em] uppercase mb-4">See It In Action</p>
+      <h2 class="reveal font-display font-bold text-4xl lg:text-5xl mb-6 text-zinc-100" style="animation-delay: 0.1s;">
+        Watch the <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Magic Happen</span>
+      </h2>
+      <p class="reveal text-zinc-400 text-lg max-w-2xl mx-auto mb-12">Upload a lecture, hit process, and watch Knowte transform it into structured learning materials.</p>
+      <div class="reveal relative mx-auto max-w-4xl" style="animation-delay: 0.2s;">
+        <div class="absolute -inset-4 bg-gradient-to-r from-amber-500/10 via-transparent to-amber-500/10 rounded-3xl blur-xl"></div>
+        <div class="relative rounded-2xl overflow-hidden shadow-2xl border border-zinc-800/50">
+          <img src="assets/Knowte.gif" alt="Knowte Demo" class="w-full">
         </div>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <!-- Technologies Section -->
-    <section class="py-12 border-y border-white/40">
-        <div class="max-w-7xl mx-auto px-6 text-center">
-            <p class="text-sm font-bold tracking-widest uppercase text-gray-500 mb-8">Powered entirely locally by</p>
-            <div
-                class="flex flex-wrap justify-center gap-12 opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
-                <div class="flex items-center gap-3 font-display font-bold text-2xl">
-                    <img src="./assets/logos/ollama.svg" alt="Ollama Logo" class="w-8 h-8 object-contain"> Ollama
-                </div>
-                <div class="flex items-center gap-3 font-display font-bold text-2xl">
-                    <img src="./assets/logos/openai.svg" alt="OpenAI Logo" class="w-8 h-8 object-contain"> Whisper.cpp
-                </div>
-                <div class="flex items-center gap-3 font-display font-bold text-2xl">
-                    <img src="./assets/logos/sqlite.svg" alt="SQLite Logo" class="w-24 h-8 object-contain"> SQLite
-                </div>
-            </div>
+  <!-- How it Works -->
+  <section id="how-it-works" class="relative py-32" style="background: linear-gradient(180deg, #111 0%, #0a0a0a 100%);">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-20">
+        <p class="reveal text-amber-500 text-sm font-semibold tracking-[0.2em] uppercase mb-4">How it Works</p>
+        <h2 class="reveal font-display font-bold text-4xl lg:text-5xl text-zinc-100" style="animation-delay: 0.1s;">
+          Three Steps to <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Smarter Study</span>
+        </h2>
+      </div>
+      <div class="grid lg:grid-cols-3 gap-8" id="steps-grid"></div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section id="tech" class="relative py-32" style="background: #0a0a0a;">
+    <div class="absolute inset-0">
+      <div class="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/3 rounded-full blur-[150px]"></div>
+    </div>
+    <div class="max-w-6xl mx-auto px-6 relative z-10">
+      <div class="text-center mb-20">
+        <p class="reveal text-amber-500 text-sm font-semibold tracking-[0.2em] uppercase mb-4">Built With</p>
+        <h2 class="reveal font-display font-bold text-4xl lg:text-5xl text-zinc-100" style="animation-delay: 0.1s;">
+          Powerful <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Tech Stack</span>
+        </h2>
+        <p class="reveal mt-6 text-zinc-400 text-lg max-w-xl mx-auto">Open-source technologies you can trust.</p>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" id="tech-grid"></div>
+    </div>
+  </section>
+
+  <!-- Privacy -->
+  <section id="privacy" class="relative py-32" style="background: linear-gradient(180deg, #0a0a0a 0%, #111 100%);">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="reveal bg-zinc-900/40 backdrop-blur-xl rounded-3xl p-10 lg:p-16 text-center border border-zinc-800/50 relative overflow-hidden" style="animation-delay: 0.1s;">
+        <!-- Decorative elements -->
+        <div class="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div class="absolute bottom-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+        
+        <div class="relative z-10">
+          <div class="w-18 h-18 mx-auto mb-8 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center border border-amber-500/20 w-16">
+            <svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+          </div>
+          <h2 class="font-display font-bold text-4xl lg:text-5xl mb-6 text-zinc-100">Your Data <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Never Leaves</span></h2>
+          <p class="text-zinc-300 text-lg max-w-2xl mx-auto mb-8 leading-relaxed">Zero cloud APIs. Zero telemetry. Audio, transcripts, notes — everything stays on your machine. The only optional external call is Semantic Scholar for research papers, which you can disable.</p>
+          <div class="flex flex-wrap justify-center gap-3">
+            <div class="bg-zinc-800/50 rounded-xl px-5 py-3 text-sm text-zinc-300 border border-zinc-700/50 flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>No cloud uploads</div>
+            <div class="bg-zinc-800/50 rounded-xl px-5 py-3 text-sm text-zinc-300 border border-zinc-700/50 flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>No API keys needed</div>
+            <div class="bg-zinc-800/50 rounded-xl px-5 py-3 text-sm text-zinc-300 border border-zinc-700/50 flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Works offline</div>
+            <div class="bg-zinc-800/50 rounded-xl px-5 py-3 text-sm text-zinc-300 border border-zinc-700/50 flex items-center gap-2"><svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Open source (GPL 3.0)</div>
+          </div>
         </div>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <!-- Features Section -->
-    <section id="features" class="py-24 px-6 relative">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-20 section-header">
-                <h2 class="text-4xl md:text-5xl font-bold font-display mb-6">Everything you need, <span
-                        class="text-gradient">offline</span>.</h2>
-                <p class="text-xl text-gray-600 max-w-2xl mx-auto">A comprehensive suite of tools built for students and
-                    researchers to extract every ounce of knowledge from lectures.</p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <!-- Feature 1 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="file-video-2" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Audio & Video Input</h3>
-                    <p class="text-gray-600 leading-relaxed">Upload media files or record directly. Supports MP3, WAV,
-                        WebM, MP4, MKV, and more.</p>
-                </div>
-
-                <!-- Feature 2 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="youtube" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">YouTube Import</h3>
-                    <p class="text-gray-600 leading-relaxed">Paste a URL and Knowte downloads & transcribes the audio
-                        instantly using yt-dlp.</p>
-                </div>
-
-                <!-- Feature 3 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="subtitles" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Local Transcription</h3>
-                    <p class="text-gray-600 leading-relaxed">Speech-to-text using Whisper.cpp with local models from
-                        tiny (75MB) to large (3GB).</p>
-                </div>
-
-                <!-- Feature 4 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="book-open" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Structured Notes</h3>
-                    <p class="text-gray-600 leading-relaxed">LLM-generated notes broken down into topics, key points,
-                        examples, and terms.</p>
-                </div>
-
-                <!-- Feature 5 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="check-circle-2" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Interactive Quizzes</h3>
-                    <p class="text-gray-600 leading-relaxed">Auto-generated MCQs, true/false, and short-answers with
-                        explanations and scoring.</p>
-                </div>
-
-                <!-- Feature 6 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="layers" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Smart Flashcards</h3>
-                    <p class="text-gray-600 leading-relaxed">Anki-style flashcards with 3-pile study mode and direct
-                        exports to .apkg formats.</p>
-                </div>
-
-                <!-- Feature 7 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="git-merge" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Mind Maps</h3>
-                    <p class="text-gray-600 leading-relaxed">Visual tree of concepts via React Flow. Export your mental
-                        models to PNG and SVG.</p>
-                </div>
-
-                <!-- Feature 8 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="flask-conical" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Research Papers</h3>
-                    <p class="text-gray-600 leading-relaxed">Find related academic papers through Semantic Scholar API
-                        (optional cloud feature).</p>
-                </div>
-
-                <!-- Feature 9 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="message-square-dashed" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Explain This</h3>
-                    <p class="text-gray-600 leading-relaxed">Highlight text and get a contextual AI breakdown. Toggle
-                        'simpler' or 'deeper'.</p>
-                </div>
-
-                <!-- Feature 10 -->
-                <div class="neumorphic p-8 feature-card group">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary group-hover:text-accent transition-colors">
-                        <i data-lucide="library" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3 font-display">Lecture Library</h3>
-                    <p class="text-gray-600 leading-relaxed">Persistent SQLite-backed history of all your lectures with
-                        blazing fast full-text search.</p>
-                </div>
-
-                <!-- Feature 11 -->
-                <div class="neumorphic p-8 feature-card group md:col-span-2 lg:col-span-2 bg-primary/5">
-                    <div
-                        class="w-14 h-14 neumorphic-inset rounded-2xl flex items-center justify-center mb-6 text-primary">
-                        <i data-lucide="shield-check" class="w-7 h-7"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold mb-3 font-display">100% Local & Private</h3>
-                    <p class="text-gray-600 leading-relaxed text-lg">Your data is yours. No cloud APIs, no shadow
-                        telemetry. Audio and transcriptions never leave your device.</p>
-                </div>
-            </div>
+  <!-- Downloads -->
+  <section id="downloads" class="relative py-32" style="background: #0a0a0a;">
+    <div class="absolute inset-0">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/5 rounded-full blur-[150px]"></div>
+    </div>
+    <div class="max-w-6xl mx-auto px-6 relative z-10">
+      <div class="text-center mb-16">
+        <p class="reveal text-amber-500 text-sm font-semibold tracking-[0.2em] uppercase mb-4">Download</p>
+        <h2 class="reveal font-display font-bold text-4xl lg:text-5xl text-zinc-100" style="animation-delay: 0.1s;">
+          Get <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Knowte</span> for Your Platform
+        </h2>
+        <p class="reveal mt-6 text-zinc-400 text-lg max-w-xl mx-auto">Choose your platform to download the latest release.</p>
+      </div>
+      
+      <!-- Platform Tabs -->
+      <div class="reveal flex justify-center gap-2 mb-10" style="animation-delay: 0.15s;">
+        <button onclick="setPlatform('windows')" id="tab-windows" class="platform-tab px-6 py-3 rounded-full text-sm font-medium transition-all duration-300 bg-amber-500 text-black">Windows</button>
+        <button onclick="setPlatform('mac')" id="tab-mac" class="platform-tab px-6 py-3 rounded-full text-sm font-medium transition-all duration-300 bg-zinc-800 text-zinc-400 hover:text-white">macOS</button>
+        <button onclick="setPlatform('linux')" id="tab-linux" class="platform-tab px-6 py-3 rounded-full text-sm font-medium transition-all duration-300 bg-zinc-800 text-zinc-400 hover:text-white">Linux</button>
+      </div>
+      
+      <!-- Downloads Grid -->
+      <div id="downloads-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto justify-items-center">
+        <div class="col-span-full text-center py-8 text-zinc-500">
+          <svg class="w-8 h-8 mx-auto mb-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          <p>Loading releases...</p>
         </div>
-    </section>
+      </div>
+      
+      <!-- Latest Version Info -->
+      <div id="version-info" class="text-center mt-8 text-zinc-500 text-sm"></div>
+    </div>
+  </section>
 
-    <!-- How it Works Section -->
-    <section id="how-it-works" class="py-24 px-6 relative border-t border-white/40 overflow-hidden">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-20 section-header">
-                <h2 class="text-4xl md:text-5xl font-bold font-display mb-6">How <span
-                        class="text-gradient">Knowte</span> Works</h2>
-                <p class="text-xl text-gray-600 max-w-2xl mx-auto">A seamless pipeline from raw audio to structured
-                    knowledge.</p>
-            </div>
+  <!-- CTA -->
+  <section class="relative py-32" style="background: #111;">
+    <div class="absolute inset-0">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_100%,rgba(245,158,11,0.06)_0%,transparent_60%)]"></div>
+    </div>
+    <div class="max-w-4xl mx-auto px-6 text-center relative z-10">
+      <h2 class="reveal font-display font-bold text-4xl lg:text-6xl text-zinc-100 mb-6" style="animation-delay: 0.1s;">
+        Ready to <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">Learn Smarter</span>?
+      </h2>
+      <p class="reveal text-zinc-400 text-lg max-w-xl mx-auto mb-12">Download Knowte for free. Available on Linux, macOS, and Windows.</p>
+      <div class="reveal flex flex-col sm:flex-row items-center justify-center gap-5" style="animation-delay: 0.2s;">
+        <a href="#downloads" class="btn-primary bg-amber-500 hover:bg-amber-400 text-black px-12 py-5 rounded-full text-lg font-semibold shadow-[0_0_40px_rgba(245,158,11,0.3)] hover:shadow-[0_0_60px_rgba(245,158,11,0.5)] transition-all duration-300">Download Now</a>
+        <a href="https://github.com/GxAditya/Knowte" target="_blank" class="inline-flex items-center gap-3 text-amber-400 hover:text-amber-300 transition-colors text-lg font-medium">
+          Star on GitHub
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
 
-            <div class="relative max-w-4xl mx-auto">
-                <!-- Connecting Line -->
-                <div
-                    class="absolute left-8 md:left-1/2 top-0 bottom-0 w-1 bg-gray-200/50 -translate-x-1/2 rounded-full overflow-hidden">
-                    <div class="w-full bg-primary h-full origin-top scale-y-0 progress-line"></div>
-                </div>
+  <!-- Footer -->
+  <footer class="border-t border-zinc-800/50 py-10" style="background: #0a0a0a;">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="assets/Knowte.png" alt="Knowte" class="w-7 h-7">
+        <span class="font-display font-semibold text-amber-400">Knowte</span>
+      </div>
+      <p class="text-zinc-500 text-sm">&copy; 2026 Knowte. Open source under GPL 3.0.</p>
+      <div class="flex items-center gap-5">
+        <a href="https://github.com/GxAditya/Knowte" target="_blank" class="text-zinc-500 hover:text-amber-400 transition-colors" aria-label="GitHub">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+      </div>
+    </div>
+  </footer>
 
-                <div class="space-y-12">
-                    <!-- Step 1 -->
-                    <div class="relative flex flex-col md:flex-row items-center justify-between step-card">
-                        <div class="hidden md:flex flex-1 justify-end pr-12 text-right">
-                            <div class="neumorphic p-6 rounded-2xl max-w-sm">
-                                <h3 class="text-xl font-bold mb-2 font-display">1. Import or Record</h3>
-                                <p class="text-gray-600">Drop in a video, paste a YouTube link, or record your lecture
-                                    live.</p>
-                            </div>
-                        </div>
-                        <div
-                            class="w-16 h-16 neumorphic-inset rounded-full flex items-center justify-center text-primary z-10 bg-bg border-4 border-bg shrink-0 absolute left-0 md:left-1/2 -translate-x-1/2">
-                            <i data-lucide="mic" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex-1 md:hidden pl-20">
-                            <div class="neumorphic p-6 rounded-2xl w-full">
-                                <h3 class="text-xl font-bold mb-2 font-display">1. Import or Record</h3>
-                                <p class="text-gray-600">Drop in a video, paste a YouTube link, or record your lecture
-                                    live.</p>
-                            </div>
-                        </div>
-                        <div class="hidden md:block flex-1 pl-12"></div>
-                    </div>
-
-                    <!-- Step 2 -->
-                    <div class="relative flex flex-col md:flex-row items-center justify-between step-card">
-                        <div class="hidden md:block flex-1 pr-12 text-right"></div>
-                        <div
-                            class="w-16 h-16 neumorphic-inset rounded-full flex items-center justify-center text-accent z-10 bg-bg border-4 border-bg shrink-0 absolute left-0 md:left-1/2 -translate-x-1/2">
-                            <i data-lucide="file-audio" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex-1 pl-20 md:pl-12 w-full md:w-auto">
-                            <div class="neumorphic p-6 rounded-2xl max-w-sm">
-                                <h3 class="text-xl font-bold mb-2 font-display">2. Local Transcription</h3>
-                                <p class="text-gray-600">Whisper.cpp transcribes the audio locally with blazing speed
-                                    and accuracy.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 3 -->
-                    <div class="relative flex flex-col md:flex-row items-center justify-between step-card">
-                        <div class="hidden md:flex flex-1 justify-end pr-12 text-right">
-                            <div class="neumorphic p-6 rounded-2xl max-w-sm">
-                                <h3 class="text-xl font-bold mb-2 font-display">3. AI Processing</h3>
-                                <p class="text-gray-600">Ollama analyzes the transcript to extract key points, terms,
-                                    and context.</p>
-                            </div>
-                        </div>
-                        <div
-                            class="w-16 h-16 neumorphic-inset rounded-full flex items-center justify-center text-primary z-10 bg-bg border-4 border-bg shrink-0 absolute left-0 md:left-1/2 -translate-x-1/2">
-                            <i data-lucide="brain-circuit" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex-1 md:hidden pl-20 w-full">
-                            <div class="neumorphic p-6 rounded-2xl w-full">
-                                <h3 class="text-xl font-bold mb-2 font-display">3. AI Processing</h3>
-                                <p class="text-gray-600">Ollama analyzes the transcript to extract key points, terms,
-                                    and context.</p>
-                            </div>
-                        </div>
-                        <div class="hidden md:block flex-1 pl-12"></div>
-                    </div>
-
-                    <!-- Step 4 -->
-                    <div class="relative flex flex-col md:flex-row items-center justify-between step-card">
-                        <div class="hidden md:block flex-1 pr-12 text-right"></div>
-                        <div
-                            class="w-16 h-16 neumorphic-inset rounded-full flex items-center justify-center text-primary z-10 bg-bg border-4 border-bg shrink-0 absolute left-0 md:left-1/2 -translate-x-1/2 shadow-[0_0_15px_rgba(58,37,168,0.5)]">
-                            <i data-lucide="sparkles" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex-1 pl-20 md:pl-12 w-full md:w-auto">
-                            <div class="neumorphic p-6 rounded-2xl max-w-sm border border-primary/20 bg-primary/5">
-                                <h3 class="text-xl font-bold mb-2 font-display">4. Output Delivered</h3>
-                                <p class="text-gray-600">Get your structured notes, quizzes, mind maps, and flashcards
-                                    instantly.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Use Cases Section -->
-    <section id="use-cases" class="py-24 px-6 relative border-t border-white/40 overflow-hidden">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16 section-header">
-                <h2 class="text-4xl md:text-5xl font-bold font-display mb-6">Designed for <span
-                        class="text-gradient">Every Learner</span></h2>
-                <p class="text-xl text-gray-600 max-w-2xl mx-auto">Tailored features to match your specific study needs.
-                </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <!-- Case 1 -->
-                <div
-                    class="neumorphic p-8 rounded-3xl flex flex-col h-full use-case-card group hover:-translate-y-2 transition-transform duration-300">
-                    <div
-                        class="w-16 h-16 neumorphic-inset rounded-2xl mb-6 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
-                        <i data-lucide="graduation-cap" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-3">For Students</h3>
-                    <p class="text-gray-600 leading-relaxed mb-8 flex-1">Turn 2-hour university lectures into readable
-                        notes in minutes. Instantly generate flashcards and quizzes for upcoming exams.</p>
-                    <ul class="space-y-3 text-sm font-medium text-gray-700 mt-auto">
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            Flashcard generation</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            Instant summaries</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            Exam prep quizzes</li>
-                    </ul>
-                </div>
-
-                <!-- Case 2 -->
-                <div
-                    class="neumorphic bg-primary/5 p-8 rounded-3xl flex flex-col h-full use-case-card group hover:-translate-y-2 transition-transform duration-300 border border-primary/10 relative overflow-hidden">
-                    <div
-                        class="w-16 h-16 neumorphic-inset rounded-2xl mb-6 flex items-center justify-center text-accent group-hover:scale-110 transition-transform duration-500">
-                        <i data-lucide="microscope" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-3">For Researchers</h3>
-                    <p class="text-gray-600 leading-relaxed mb-8 flex-1 relative z-10">Extract key technical arguments
-                        from academic presentations. Let Knowte link concepts to existing research papers seamlessly.
-                    </p>
-                    <ul class="space-y-3 text-sm font-medium text-gray-700 mt-auto relative z-10">
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-accent"></i>
-                            Paper cross-referencing</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-accent"></i>
-                            Concept mapping</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-accent"></i> Deep
-                            explanations</li>
-                    </ul>
-                </div>
-
-                <!-- Case 3 -->
-                <div
-                    class="neumorphic p-8 rounded-3xl flex flex-col h-full use-case-card group hover:-translate-y-2 transition-transform duration-300">
-                    <div
-                        class="w-16 h-16 neumorphic-inset rounded-2xl mb-6 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
-                        <i data-lucide="briefcase" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-3">For Professionals</h3>
-                    <p class="text-gray-600 leading-relaxed mb-8 flex-1">Record long meetings, webinars, or conferences
-                        and get absolute clarity on action items without violating company privacy policies.</p>
-                    <ul class="space-y-3 text-sm font-medium text-gray-700 mt-auto">
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            100% Confidential</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            Meeting action items</li>
-                        <li class="flex items-center gap-3"><i data-lucide="check" class="w-5 h-5 text-primary"></i>
-                            Quick search history</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Metrics Section -->
-    <section id="metrics" class="py-24 px-6 relative border-t border-white/40">
-        <div class="max-w-7xl mx-auto">
-            <div
-                class="neumorphic p-10 md:p-16 rounded-[40px] relative overflow-hidden items-center justify-between flex flex-col lg:flex-row gap-12 border border-white/60">
-                <!-- BG Elements -->
-
-                <div class="flex-1 relative z-10 text-center lg:text-left metrics-content">
-                    <div
-                        class="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase text-primary mb-4 p-2 rounded-lg bg-primary/5 neumorphic-inset w-auto">
-                        <i data-lucide="zap" class="w-4 h-4"></i> Unmatched Performance
-                    </div>
-                    <h2 class="text-4xl md:text-5xl font-bold font-display mb-6 leading-tight">Zero latency.<br /><span
-                            class="text-gradient">Infinite privacy.</span></h2>
-                    <p class="text-lg text-gray-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">Because everything runs on
-                        your own hardware, you never have to wait for server queues, pay monthly API fees, or worry
-                        about data leaks.</p>
-                </div>
-
-                <div class="flex-1 w-full grid grid-cols-2 gap-6 relative z-10">
-                    <div
-                        class="neumorphic-inset p-6 rounded-3xl flex flex-col items-center justify-center text-center metric-box bg-bg">
-                        <div class="flex items-end gap-1 mb-2 mt-4 relative">
-                            <span class="text-4xl md:text-5xl font-bold font-display text-primary counter-value"
-                                data-target="100">0</span>
-                            <span class="text-3xl font-bold text-primary mb-1">%</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 max-w-[120px]">Local Processing</span>
-                    </div>
-                    <div
-                        class="neumorphic-inset p-6 rounded-3xl flex flex-col items-center justify-center text-center metric-box bg-bg">
-                        <div class="flex items-end gap-1 mb-2 mt-4 relative">
-                            <span class="text-3xl font-bold text-accent mb-1">$</span>
-                            <span class="text-4xl md:text-5xl font-bold font-display text-accent counter-value"
-                                data-target="0">99</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 max-w-[120px]">Monthly Fees</span>
-                    </div>
-                    <div
-                        class="neumorphic-inset p-6 rounded-3xl flex flex-col items-center justify-center text-center metric-box bg-bg">
-                        <div class="flex items-end gap-1 mb-2 mt-4 relative">
-                            <span class="text-4xl md:text-5xl font-bold font-display text-text counter-value"
-                                data-target="250">2500</span>
-                            <span class="text-3xl font-bold text-text mb-1">s</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 max-w-[120px]">Avg Transcription Time</span>
-                    </div>
-                    <div
-                        class="neumorphic-inset p-6 rounded-3xl flex flex-col items-center justify-center text-center metric-box bg-bg">
-                        <div class="flex items-end gap-1 mb-2 mt-4 relative">
-                            <span class="text-4xl md:text-5xl font-bold font-display text-primary counter-value"
-                                data-target="1000">0</span>
-                            <span class="text-3xl font-bold text-primary mb-1">+</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 max-w-[120px]">Hours Supported</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Download Section -->
-    <section id="download" class="py-24 px-6">
-        <div class="max-w-5xl mx-auto">
-            <div class="text-center mb-16 section-header">
-                <h2 class="text-4xl md:text-5xl font-bold font-display mb-6">Install <span
-                        class="text-gradient">Knowte</span></h2>
-                <p class="text-xl text-gray-600">Available for all major operating systems. Completely free and
-                    open-source.</p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <!-- Windows -->
-                <div class="neumorphic p-8 flex flex-col items-center text-center download-card">
-                    <div
-                        class="w-20 h-20 neumorphic-inset rounded-full flex items-center justify-center mb-6 text-primary">
-                        <i data-lucide="monitor" class="w-10 h-10"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-2">Windows</h3>
-                    <p class="text-gray-500 mb-8 text-sm">Windows 10 / 11 (64-bit)</p>
-
-                    <div class="w-full space-y-3 mt-auto">
-                        <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-windows-exe" target="_blank"
-                            class="neumorphic-primary w-full py-3 px-4 flex items-center justify-center gap-2 font-semibold text-sm">
-                            <i data-lucide="download" class="w-4 h-4"></i> Download .exe
-                        </a>
-                        <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-windows-msi" target="_blank"
-                            class="neumorphic-btn w-full py-3 px-4 flex items-center justify-center gap-2 font-semibold text-sm text-gray-600">
-                            Download .msi
-                        </a>
-                    </div>
-                </div>
-
-                <!-- macOS -->
-                <div class="neumorphic p-8 flex flex-col items-center text-center download-card">
-                    <div
-                        class="w-20 h-20 neumorphic-inset rounded-full flex items-center justify-center mb-6 text-primary">
-                        <i data-lucide="apple" class="w-10 h-10"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-2">macOS</h3>
-                    <p class="text-gray-500 mb-8 text-sm">Apple Silicon & Intel</p>
-
-                    <div class="w-full space-y-3 mt-auto">
-                        <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-mac-dmg" target="_blank"
-                            class="neumorphic-primary w-full py-3 px-4 flex items-center justify-center gap-2 font-semibold text-sm">
-                            <i data-lucide="download" class="w-4 h-4"></i> Download .dmg
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Linux -->
-                <div class="neumorphic p-8 flex flex-col items-center text-center download-card">
-                    <div
-                        class="w-20 h-20 neumorphic-inset rounded-full flex items-center justify-center mb-6 text-primary">
-                        <i data-lucide="terminal" class="w-10 h-10"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold font-display mb-2">Linux</h3>
-                    <p class="text-gray-500 mb-8 text-sm">Ubuntu, Fedora, Arch, etc.</p>
-
-                    <div class="w-full space-y-3 mt-auto">
-                        <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-linux-appimage"
-                            target="_blank"
-                            class="neumorphic-primary w-full py-3 px-4 flex items-center justify-center gap-2 font-semibold text-sm">
-                            <i data-lucide="download" class="w-4 h-4"></i> AppImage
-                        </a>
-                        <div class="flex gap-3">
-                            <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-linux-deb"
-                                target="_blank"
-                                class="neumorphic-btn flex-1 py-3 px-2 flex items-center justify-center gap-1 font-semibold text-xs text-gray-600">
-                                .deb
-                            </a>
-                            <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-linux-rpm"
-                                target="_blank"
-                                class="neumorphic-btn flex-1 py-3 px-2 flex items-center justify-center gap-1 font-semibold text-xs text-gray-600">
-                                .rpm
-                            </a>
-                            <a href="https://github.com/GxAditya/Knowte/releases/latest" id="dl-linux-tar"
-                                target="_blank"
-                                class="neumorphic-btn flex-1 py-3 px-2 flex items-center justify-center gap-1 font-semibold text-xs text-gray-600">
-                                .tar.gz
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-12 neumorphic p-6 border-l-4 border-primary flex items-start gap-4 mx-auto max-w-2xl">
-                <i data-lucide="info" class="text-primary mt-1 shrink-0"></i>
-                <div class="text-left text-sm text-gray-700">
-                    <strong class="block mb-1 text-text">Installation Notes</strong>
-                    Before running Knowte, ensure that you have <a href="https://ollama.ai" target="_blank"
-                        class="text-primary underline font-medium">Ollama</a> installed and running locally. The first
-                    launch will automatically download the Whisper transcription models required for processing audio.
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="mt-20 border-t border-white/40 pb-12 pt-16 px-6">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-            <div class="flex items-center gap-3">
-                <img src="./assets/Knowte.png" alt="Knowte Logo"
-                    class="w-12 h-12 object-contain opacity-80 drop-shadow-[0_0_8px_rgba(58,37,168,0.4)]">
-                <span class="font-bold text-gray-500 font-display text-lg">Knowte</span>
-            </div>
-
-            <p class="text-gray-500 text-sm font-medium">
-                Released under the <a href="https://github.com/GxAditya/Knowte/blob/main/LICENSE" target="_blank"
-                    class="text-primary hover:underline">GPL 3.0 License</a>.
-            </p>
-
-            <div class="flex gap-4">
-                <a href="https://github.com/GxAditya/Knowte" target="_blank"
-                    class="w-10 h-10 neumorphic-btn flex items-center justify-center text-gray-500 hover:text-primary">
-                    <i data-lucide="github" class="w-5 h-5"></i>
-                </a>
-            </div>
-        </div>
-    </footer>
-
-    <!-- Scripts -->
-    <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
-
-        // GSAP Animations
-        gsap.registerPlugin(ScrollTrigger);
-
-        // Hero Init
-        gsap.from(".hero-content > *", {
-            y: 30,
-            opacity: 0,
-            duration: 1,
-            stagger: 0.15,
-            ease: "power3.out"
-        });
-
-        gsap.from(".hero-graphic", {
-            y: 50,
-            opacity: 0,
-            duration: 1.2,
-            delay: 0.5,
-            ease: "power3.out"
-        });
-
-        // Feature cards stagger
-        const featureCards = gsap.utils.toArray('.feature-card');
-        gsap.from(featureCards, {
-            scrollTrigger: {
-                trigger: "#features",
-                start: "top 80%",
-            },
-            y: 50,
-            opacity: 0,
-            duration: 0.8,
-            stagger: 0.1,
-            ease: "power2.out"
-        });
-
-        // How it works line animation
-        gsap.to(".progress-line", {
-            scaleY: 1,
-            ease: "none",
-            scrollTrigger: {
-                trigger: "#how-it-works",
-                start: "top center",
-                end: "bottom center",
-                scrub: true
-            }
-        });
-
-        const stepCards = gsap.utils.toArray('.step-card');
-        stepCards.forEach((card, i) => {
-            gsap.from(card, {
-                scrollTrigger: {
-                    trigger: card,
-                    start: "top 80%",
-                },
-                x: i % 2 === 0 ? -50 : 50,
-                opacity: 0,
-                duration: 0.8,
-                ease: "power2.out"
-            });
-        });
-
-        // Use cases stagger
-        const useCaseCards = gsap.utils.toArray('.use-case-card');
-        gsap.from(useCaseCards, {
-            scrollTrigger: {
-                trigger: "#use-cases",
-                start: "top 80%",
-            },
-            y: 50,
-            opacity: 0,
-            duration: 1,
-            stagger: 0.2,
-            ease: "back.out(1.2)"
-        });
-
-        // Metrics animations
-        gsap.from(".metrics-content > *", {
-            scrollTrigger: {
-                trigger: "#metrics",
-                start: "top 80%"
-            },
-            x: -50,
-            opacity: 0,
-            duration: 0.8,
-            stagger: 0.1,
-            ease: "power2.out"
-        });
-
-        const metricBoxes = gsap.utils.toArray('.metric-box');
-        gsap.from(metricBoxes, {
-            scrollTrigger: {
-                trigger: "#metrics",
-                start: "top 80%"
-            },
-            scale: 0.8,
-            opacity: 0,
-            duration: 0.8,
-            stagger: 0.1,
-            ease: "back.out(1.2)",
-            onComplete: () => {
-                // Animate counters
-                document.querySelectorAll('.counter-value').forEach(counter => {
-                    const target = parseInt(counter.getAttribute('data-target'));
-                    gsap.to(counter, {
-                        innerHTML: target,
-                        duration: 2,
-                        snap: { innerHTML: 1 },
-                        ease: "power2.out"
-                    });
-                });
-            }
-        });
-
-        // Download cards stagger
-        const downloadCards = gsap.utils.toArray('.download-card');
-        gsap.from(downloadCards, {
-            scrollTrigger: {
-                trigger: "#download",
-                start: "top 80%",
-            },
-            scale: 0.9,
-            opacity: 0,
-            duration: 0.8,
-            stagger: 0.15,
-            ease: "back.out(1.2)"
-        });
-
-        // Section headers
-        gsap.utils.toArray('.section-header').forEach(header => {
-            gsap.from(header, {
-                scrollTrigger: {
-                    trigger: header,
-                    start: "top 85%",
-                },
-                y: 30,
-                opacity: 0,
-                duration: 0.8
-            });
-        });
-
-        // Fetch latest release assets and update download links dynamically
-        async function fetchLatestRelease() {
-            try {
-                const response = await fetch('https://api.github.com/repos/GxAditya/Knowte/releases/latest');
-                if (!response.ok) throw new Error('Failed to fetch release info');
-                const data = await response.json();
-
-                const assets = data.assets;
-                const setLink = (id, extension1, extension2 = null) => {
-                    const el = document.getElementById(id);
-                    if (!el) return;
-                    const asset = assets.find(a => a.name.endsWith(extension1) || (extension2 && a.name.endsWith(extension2)));
-                    if (asset) {
-                        el.href = asset.browser_download_url;
-                        // Optional: we can remove target="_blank" so it downloads in the same tab instead of opening a blank tab
-                        el.removeAttribute("target");
-                    }
-                };
-
-                setLink('dl-windows-exe', '.exe');
-                setLink('dl-windows-msi', '.msi');
-                setLink('dl-mac-dmg', '.dmg');
-                setLink('dl-linux-appimage', '.AppImage', '.appimage');
-                setLink('dl-linux-deb', '.deb');
-                setLink('dl-linux-rpm', '.rpm');
-                setLink('dl-linux-tar', '.tar.gz');
-            } catch (error) {
-                console.error("Error fetching release assets:", error);
-            }
-        }
-        fetchLatestRelease();
-    </script>
+  <script src="assets/main.js"></script>
 </body>
-
 </html>
