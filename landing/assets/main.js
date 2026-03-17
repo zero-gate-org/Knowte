@@ -134,6 +134,7 @@ async function fetchReleases() {
     const response = await fetch('https://api.github.com/repos/zero-gate-org/Knowte/releases');
     if (!response.ok) throw new Error('Failed to fetch releases');
     releasesData = await response.json();
+    detectAndSetupDownload(); // Add this line
     renderDownloads();
   } catch (error) {
     console.error('Error fetching releases:', error);
@@ -145,6 +146,57 @@ async function fetchReleases() {
     `;
   }
 }
+
+// Add these new functions
+function detectAndSetupDownload() {
+  const os = getOS();
+  document.querySelectorAll('.platform-tab').forEach(tab => {
+    tab.classList.remove('bg-amber-500', 'text-black');
+    tab.classList.add('bg-zinc-800', 'text-zinc-400');
+  });
+  
+  const activeTab = document.getElementById(`tab-${os}`);
+  if (activeTab) {
+    activeTab.classList.remove('bg-zinc-800', 'text-zinc-400');
+    activeTab.classList.add('bg-amber-500', 'text-black');
+  }
+  
+  currentPlatform = os; // Important: update global state
+  
+  const downloads = filterByPlatform(releasesData);
+  
+  if (downloads.length > 0) {
+    const bestDownload = downloads[0].url;
+    
+    document.querySelectorAll('.js-auto-download').forEach(btn => {
+      btn.href = bestDownload;
+      btn.removeAttribute('target');
+      
+      // Update text to indicate platform, but keep styles clean
+      // btn.innerHTML = `Download for ${platformNames[os]}`; 
+    });
+  }
+}
+
+function getOS() {
+  const platform = window.navigator?.userAgentData?.platform || window.navigator.platform;
+  const userAgent = window.navigator.userAgent;
+  
+  if (['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K', 'macOS'].includes(platform)) {
+    return 'mac';
+  } else if (['iPhone', 'iPad', 'iPod'].includes(platform)) {
+    return 'mac'; // Or handle iOS separately
+  } else if (['Win32', 'Win64', 'Windows', 'WinCE'].includes(platform)) {
+    return 'windows';
+  } else if (/Android/.test(userAgent)) {
+    return 'linux'; // Android is Linux-based
+  } else if (/Linux/.test(platform)) {
+    return 'linux';
+  }
+
+  return 'windows'; // Default fallback
+}
+
 
 function filterByPlatform(releases) {
   if (!releases || releases.length === 0) return [];
@@ -204,7 +256,7 @@ function renderDownloads() {
   versionInfo.innerHTML = `<p>Latest: <span class="text-amber-400">${latestVersion}</span> • ${downloads.length} installer(s) available</p>`;
   
   grid.innerHTML = downloads.map(d => `
-    <a href="${d.url}" target="_blank" class="tech-card group bg-zinc-900/60 backdrop-blur-sm rounded-xl p-5 border border-zinc-800/50 hover:border-amber-500/30 transition-all duration-300 flex items-center gap-4 w-full">
+    <a href="${d.url}" target="_blank" class="tech-card group bg-zinc-900/60 backdrop-blur-sm rounded-xl p-5 border border-zinc-800/50 hover:border-amber-500/30 transition-all duration-300 flex items-center gap-4 w-full sm:w-auto min-w-[280px]">
       <div class="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
         ${iconSvgs[currentPlatform]}
       </div>
