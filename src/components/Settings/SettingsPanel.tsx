@@ -221,6 +221,7 @@ export default function SettingsPanel() {
             <div className="flex items-start gap-3">
               <Switch
                 id="delete_audio"
+                type="button"
                 checked={formData.delete_audio_after_processing}
                 onCheckedChange={(checked) => updateField("delete_audio_after_processing", checked)}
               />
@@ -295,6 +296,7 @@ export default function SettingsPanel() {
             <div className="flex items-start gap-3">
               <Switch
                 id="enable_research"
+                type="button"
                 checked={formData.enable_research}
                 onCheckedChange={(checked) => updateField("enable_research", checked)}
               />
